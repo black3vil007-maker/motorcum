@@ -777,8 +777,11 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
   }
 
   const handleOdemeDegistir = async (yeniOdeme) => {
-    await supabase.from('is_emirleri').update({ odeme_durumu: yeniOdeme }).eq('id', isEmri.id)
-    setIsEmri(prev => ({ ...prev, odeme_durumu: yeniOdeme }))
+    const updates = { odeme_durumu: yeniOdeme }
+    if (yeniOdeme === 'odendi') updates.odenen_tutar = isEmri.toplam_tutar
+    if (yeniOdeme === 'odenmedi') updates.odenen_tutar = 0
+    await supabase.from('is_emirleri').update(updates).eq('id', isEmri.id)
+    setIsEmri(prev => ({ ...prev, odeme_durumu: yeniOdeme, odenen_tutar: updates.odenen_tutar ?? prev.odenen_tutar }))
     setForm(prev => ({ ...prev, odeme_durumu: yeniOdeme }))
     if (onDurumGuncelle) onDurumGuncelle(isEmri.id, null, yeniOdeme)
   }
@@ -1031,6 +1034,40 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
                         {o}
                       </button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* KISMİ ÖDEME TUTARI */}
+              {isEmri.odeme_durumu === 'kismi' && (
+                <div>
+                  <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px'}}>
+                    Ödenen Tutar
+                  </div>
+                  <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      defaultValue={isEmri.odenen_tutar || 0}
+                      onBlur={async (e) => {
+                        const tutar = parseFloat(e.target.value || 0)
+                        await supabase.from('is_emirleri').update({odenen_tutar: tutar}).eq('id', isEmri.id)
+                        setIsEmri(prev => ({ ...prev, odenen_tutar: tutar }))
+                        onGuncellendi && onGuncellendi()
+                      }}
+                      style={{
+                        background:'var(--bg-base)', border:'1px solid var(--border)',
+                        borderRadius:'8px', padding:'8px 12px', color:'var(--text-primary)',
+                        fontSize:'14px', fontWeight:600, width:'150px', outline:'none'
+                      }}
+                    />
+                    <span style={{fontSize:'12px',color:'var(--text-muted)'}}>
+                      / ₺{(isEmri.toplam_tutar||0).toLocaleString('tr-TR')} toplam
+                    </span>
+                  </div>
+                  <div style={{fontSize:'11px',color:'#f5a623',marginTop:'6px'}}>
+                    Kalan: ₺{((isEmri.toplam_tutar||0) - (isEmri.odenen_tutar||0)).toLocaleString('tr-TR')}
                   </div>
                 </div>
               )}

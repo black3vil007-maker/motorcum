@@ -185,6 +185,8 @@ const AracTanimlamalari = () => {
 const IsEmriTanimlamalari = () => {
   const [parcalar, setParcalar] = useState([])
   const [loading, setLoading] = useState(true)
+  const [parcaArama, setParcaArama] = useState('')
+  const [parcaKategoriFiltre, setParcaKategoriFiltre] = useState('')
   const [yeniParca, setYeniParca] = useState({ kod:'', isim:'', kategori:'', birim:'adet', birim_fiyat:'' })
   const [msg, setMsg] = useState({ text:'', type:'' })
 
@@ -200,7 +202,7 @@ const IsEmriTanimlamalari = () => {
 
   const parcaEkle = async () => {
     if (!yeniParca.isim.trim()) return showMsg('Parça adı zorunludur.', 'error')
-    const { error } = await supabase.from('parcalar').insert({ ...yeniParca, isim: yeniParca.isim.trim(), kod: yeniParca.kod.trim()||null, birim_fiyat: parseFloat(yeniParca.birim_fiyat||0) })
+    const { error } = await supabase.from('parcalar').insert({ ...yeniParca, isim: yeniParca.isim.trim().toUpperCase(), kod: yeniParca.kod.trim().toUpperCase()||null, birim_fiyat: parseFloat(yeniParca.birim_fiyat||0) })
     if (error) showMsg(error.message, 'error')
     else { setYeniParca({ kod:'', isim:'', kategori:'', birim:'adet', birim_fiyat:'' }); fetchParcalar(); showMsg('Parça eklendi!') }
   }
@@ -245,11 +247,47 @@ const IsEmriTanimlamalari = () => {
         </div>
       </div>
       <div className="table-card">
-        <div className="table-header"><span className="table-title">Parça Listesi ({parcalar.length})</span></div>
+        <div className="table-header">
+          <span className="table-title">Parça Listesi ({parcalar.filter(p => {
+            const aramaUy = !parcaArama || p.isim.toLowerCase().includes(parcaArama.toLowerCase()) || (p.kod||'').toLowerCase().includes(parcaArama.toLowerCase())
+            const kategoriUy = !parcaKategoriFiltre || p.kategori === parcaKategoriFiltre
+            return aramaUy && kategoriUy
+          }).length}/{parcalar.length})</span>
+        </div>
+        {/* Filtreler */}
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',padding:'0 0 12px 0'}}>
+          <input
+            className="search-input"
+            style={{flex:2,minWidth:'160px'}}
+            placeholder="Parça adı veya kod ara..."
+            value={parcaArama}
+            onChange={e => setParcaArama(e.target.value)}
+          />
+          <select
+            className="search-input"
+            style={{flex:1,minWidth:'130px'}}
+            value={parcaKategoriFiltre}
+            onChange={e => setParcaKategoriFiltre(e.target.value)}
+          >
+            <option value="">Tüm Kategoriler</option>
+            {[...new Set(parcalar.map(p => p.kategori).filter(Boolean))].sort().map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          {(parcaArama || parcaKategoriFiltre) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setParcaArama(''); setParcaKategoriFiltre('') }}>
+              Temizle
+            </button>
+          )}
+        </div>
         {loading ? <div className="empty-state"><p>Yükleniyor...</p></div> : parcalar.length === 0 ? <div className="empty-state"><div className="empty-state-icon">🔩</div><p>Henüz parça tanımlanmamış</p></div> :
           <table>
             <thead><tr><th>Parça Adı</th><th>Kod</th><th>Kategori</th><th>Birim</th><th>Fiyat</th><th></th></tr></thead>
-            <tbody>{parcalar.map(p => (
+            <tbody>{parcalar.filter(p => {
+              const aramaUy = !parcaArama || p.isim.toLowerCase().includes(parcaArama.toLowerCase()) || (p.kod||'').toLowerCase().includes(parcaArama.toLowerCase())
+              const kategoriUy = !parcaKategoriFiltre || p.kategori === parcaKategoriFiltre
+              return aramaUy && kategoriUy
+            }).map(p => (
               <tr key={p.id}>
                 <td style={{color:'#fff',fontWeight:500}}>{p.isim}</td>
                 <td style={{color:'#888'}}>{p.kod||'-'}</td>

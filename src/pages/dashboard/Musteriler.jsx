@@ -137,7 +137,7 @@ const AracFormModal = ({ musteriId, aracData, onKaydet, onIptal }) => {
           {!duzenleme && <RuhsatTarama onDoldur={handleRuhsatDoldur} markalar={markalar} modeller={modeller} />}
           {error && <div className="alert alert-error">{error}</div>}
           <div className="form-grid">
-            <div className="field"><label>Plaka *</label><input placeholder="34ABC123" value={form.plaka} onChange={e => setForm({ ...form, plaka: e.target.value.toUpperCase() })} /></div>
+            <div className="field"><label>Plaka *</label><input placeholder="34ABC123" value={form.plaka} onChange={e => setForm({ ...form, plaka: e.target.value.toUpperCase().replace(/[\s\-]/g, '') })} /></div>
             <div className="field">
               <label>Yakıt Tipi</label>
               <select value={form.yakit_tipi} onChange={e => setForm({ ...form, yakit_tipi: e.target.value })} className="field-select">

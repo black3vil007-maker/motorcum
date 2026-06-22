@@ -76,7 +76,8 @@ const Sidebar = ({ activePage, setActivePage, profile, mobileOpen, setMobileOpen
       )}
 
       <div className="sidebar" style={mobileOpen ? { display:'flex', zIndex:100 } : {}}>
-        <div className="sidebar-brand">
+        <div className="sidebar-brand" onClick={() => { setActivePage('genel'); setMobileOpen(false) }}
+          style={{ cursor: 'pointer' }}>
           <img
             src="/logo.png"
             alt="Motorcum"

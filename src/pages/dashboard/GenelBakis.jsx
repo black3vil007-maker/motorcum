@@ -41,7 +41,7 @@ const GenelBakis = ({ onIsEmriAc }) => {
       supabase.from('musteriler').select('id', { count: 'exact', head: true }),
       supabase.from('araclar').select('id', { count: 'exact', head: true }),
       isQuery,
-      supabase.from('is_emirleri').select('id, toplam_tutar').eq('durum', 'tamamlandi').gte('created_at', bugun.toISOString()),
+      supabase.from('is_emirleri').select('id, toplam_tutar').in('durum', ['tamamlandi','teslim_edildi']).gte('updated_at', bugun.toISOString()),
     ])
 
     const tumIsler = isEmirleri.data || []

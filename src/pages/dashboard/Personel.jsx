@@ -176,12 +176,14 @@ const Personel = () => {
                         </td>
                         {isAdmin && (
                           <td>
-                            <button
-                              className={`btn btn-sm ${k.aktif ? 'btn-secondary' : 'btn-primary'}`}
-                              onClick={() => toggleAktif(k.id, k.aktif)}
-                            >
-                              {k.aktif ? 'Pasif Yap' : 'Aktif Et'}
-                            </button>
+                            {k.rol !== 'admin' && (
+                              <button
+                                className={`btn btn-sm ${k.aktif ? 'btn-secondary' : 'btn-primary'}`}
+                                onClick={() => toggleAktif(k.id, k.aktif)}
+                              >
+                                {k.aktif ? 'Pasif Yap' : 'Aktif Et'}
+                              </button>
+                            )}
                           </td>
                         )}
                       </tr>
@@ -224,7 +226,7 @@ const Personel = () => {
                       }}>
                         {stil.label}
                       </span>
-                      {isAdmin && (
+                      {isAdmin && k.rol !== 'admin' && (
                         <button
                           className={`btn btn-sm ${k.aktif ? 'btn-secondary' : 'btn-primary'}`}
                           onClick={() => toggleAktif(k.id, k.aktif)}

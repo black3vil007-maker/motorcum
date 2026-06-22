@@ -1,31 +1,39 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 
-// Linear çizgi grafik SVG
-const BarChart = ({ data, color = '#e5484d', height = 90 }) => {
-  if (!data || data.length < 2) return <div style={{height, display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-muted)',fontSize:'12px'}}>Yeterli veri yok</div>
+// Bar chart - flex tabanlı, responsive
+const BarChart = ({ data, color = '#e5484d' }) => {
+  if (!data || data.length === 0) return (
+    <div style={{height:120,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-muted)',fontSize:'12px'}}>
+      Yeterli veri yok
+    </div>
+  )
   const max = Math.max(...data.map(d => d.value), 1)
-  const w = 100 / (data.length - 1)
-  const pts = data.map((d, i) => `${i * w},${((max - d.value) / max) * (height - 20)}`).join(' ')
-  const area = `0,${height-20} ${pts} ${(data.length-1)*w},${height-20}`
   return (
-    <svg viewBox={`0 0 100 ${height}`} style={{width:'100%',height,display:'block'}} preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25"/>
-          <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
-        </linearGradient>
-      </defs>
-      <polygon points={area} fill="url(#lg)" />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-      {data.map((d, i) => (
-        <g key={i}>
-          <circle cx={i * w} cy={((max - d.value) / max) * (height - 20)} r="4" fill={color} />
-          <text x={i * w} y={height - 4} textAnchor="middle" fontSize={5.5} fill="var(--text-muted)">{d.label}</text>
-          {d.value > 0 && <text x={i * w} y={((max - d.value) / max) * (height - 20) - 7} textAnchor="middle" fontSize={9} fill={color} fontWeight="600">{d.value}</text>}
-        </g>
-      ))}
-    </svg>
+    <div style={{display:'flex',alignItems:'flex-end',gap:'6px',height:'130px',padding:'0 4px'}}>
+      {data.map((d, i) => {
+        const pct = max > 0 ? (d.value / max) * 100 : 0
+        return (
+          <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',height:'100%',justifyContent:'flex-end'}}>
+            {d.value > 0 && (
+              <span style={{fontSize:'11px',fontWeight:700,color,lineHeight:1}}>{d.value}</span>
+            )}
+            <div style={{
+              width:'100%', borderRadius:'4px 4px 0 0',
+              background: d.value > 0 ? color : 'var(--bg-elevated)',
+              height: d.value > 0 ? `${Math.max(pct, 8)}%` : '4%',
+              opacity: d.value > 0 ? 1 : 0.3,
+              transition: 'height .4s ease',
+              minHeight: '4px',
+            }}/>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'10px',color:'var(--text-muted)',fontWeight:500}}>{d.label}</div>
+              <div style={{fontSize:'9px',color:'var(--text-muted)',opacity:.6}}>{d.sub||''}</div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -88,19 +96,28 @@ const Raporlar = () => {
     const bekleyen = liste.filter(i => i.durum === 'bekliyor').length
     const devamEden = liste.filter(i => i.durum === 'devam_ediyor').length
     const iptal = liste.filter(i => i.durum === 'iptal').length
-    const toplamCiro = liste.reduce((s,i) => s+(i.toplam_tutar||0), 0)
-    const tahsilEdilen = liste.filter(i => i.odeme_durumu==='odendi').reduce((s,i) => s+(i.toplam_tutar||0), 0)
-    const kismiOdeme = liste.filter(i => i.odeme_durumu==='kismi').reduce((s,i) => s+(i.toplam_tutar||0), 0)
-    const bekleyenTahsilat = liste.filter(i => i.odeme_durumu==='odenmedi').reduce((s,i) => s+(i.toplam_tutar||0), 0)
+    const toplamCiro = liste.filter(i => i.durum !== 'iptal').reduce((s,i) => s+(i.toplam_tutar||0), 0)
+    const tahsilEdilen = liste.filter(i => i.durum !== 'iptal').reduce((s,i) => {
+      if (i.odeme_durumu === 'odendi') return s + (i.toplam_tutar||0)
+      if (i.odeme_durumu === 'kismi') return s + (i.odenen_tutar||0)
+      return s
+    }, 0)
+    const kismiOdeme = liste.filter(i => i.odeme_durumu==='kismi' && i.durum !== 'iptal').reduce((s,i) => s+(i.odenen_tutar||0), 0)
+    const bekleyenTahsilat = liste.filter(i => i.durum !== 'iptal').reduce((s,i) => {
+      if (i.odeme_durumu === 'odenmedi') return s + (i.toplam_tutar||0)
+      if (i.odeme_durumu === 'kismi') return s + ((i.toplam_tutar||0) - (i.odenen_tutar||0))
+      return s
+    }, 0)
 
-    // Günlük linear grafik - son 7 gün
+    // Günlük bar grafik - son 7 gün
     const gunlukData = []
     for (let j = 6; j >= 0; j--) {
       const g = new Date(simdi.getTime() - j*24*60*60*1000)
       const label = g.toLocaleDateString('tr-TR', { weekday:'short' })
+      const sub = `${g.getDate()}/${g.getMonth()+1}`
       const gun = g.toDateString()
       const value = liste.filter(i => new Date(i.created_at).toDateString() === gun).length
-      gunlukData.push({ label, value })
+      gunlukData.push({ label, sub, value })
     }
 
     // Personel
@@ -190,11 +207,11 @@ const Raporlar = () => {
         ))}
       </div>
 
-      {/* Grafikler */}
+      {/* Grafikler - yan yana */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
-        <div className="table-card" style={{padding:'14px'}}>
+        <div className="table-card" style={{padding:'16px'}}>
           <div style={{fontWeight:600,fontSize:'13px',color:'var(--text-primary)',marginBottom:'2px'}}>📊 Günlük İş Dağılımı</div>
-          <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'10px'}}>Son 7 gün</div>
+          <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'14px'}}>Son 7 gün — iş emri sayısı</div>
           <BarChart data={data.gunlukData} color="#e5484d" />
         </div>
         <div className="table-card" style={{padding:'14px'}}>
@@ -202,9 +219,9 @@ const Raporlar = () => {
           <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px'}}>İş emirleri</div>
           {data.durumData.length === 0
             ? <div style={{textAlign:'center',color:'var(--text-muted)',fontSize:'12px',padding:'20px 0'}}>Veri yok</div>
-            : <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+            : <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'10px'}}>
                 <DonutChart segments={data.durumData} size={100}/>
-                <div style={{flex:1,display:'flex',flexDirection:'column',gap:'6px'}}>
+                <div style={{width:'100%',display:'flex',flexDirection:'column',gap:'6px'}}>
                   {data.durumData.map((s,i) => (
                     <div key={i} style={{display:'flex',alignItems:'center',gap:'7px'}}>
                       <div style={{width:8,height:8,borderRadius:'50%',background:s.color,flexShrink:0}}/>
