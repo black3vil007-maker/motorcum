@@ -1,0 +1,18 @@
+/* Tema flash önleme - JS yüklenmeden önce koyu mod */
+:root {
+  color-scheme: dark;
+}
+html {
+  background: #18191f;
+}
+html[data-theme="light"] {
+  background: #eef0f4;
+  color-scheme: light;
+}
+body {
+  background: #18191f;
+  margin: 0;
+}
+html[data-theme="light"] body {
+  background: #eef0f4;
+}

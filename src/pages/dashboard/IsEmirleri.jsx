@@ -1,0 +1,1331 @@
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../../supabaseClient'
+import { useAuth } from '../../context/AuthContext'
+import { IconTool, IconClock, IconLira, IconClipboard, IconTrendUp, IconAlert, IconPlus, IconSearch, IconFilter } from '../../components/Icons'
+
+const DURUMLAR = ['bekliyor', 'devam_ediyor', 'tamamlandi', 'teslim_edildi', 'iptal']
+const DURUMLAR_TR = { bekliyor: 'Bekliyor', devam_ediyor: 'Devam Ediyor', tamamlandi: 'Tamamlandı', teslim_edildi: 'Teslim Edildi', iptal: 'İptal' }
+const IS_TIPLERI = ['Bakım', 'Arıza Giderme', 'Periyodik Bakım', 'Kaza Hasarı', 'Modifikasyon', 'Diğer']
+const ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Havale/EFT']
+
+// Aranabilir müşteri dropdown
+const MusteriSelect = ({ musteriler, value, onChange }) => {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const sec = musteriler.find(m => m.id === value)
+    if (sec) setQuery(`${sec.ad} ${sec.soyad}`)
+    else setQuery('')
+  }, [value, musteriler])
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('pointerdown', h)
+    return () => document.removeEventListener('pointerdown', h)
+  }, [])
+
+  const filtered = musteriler.filter(m =>
+    `${m.ad} ${m.soyad} ${m.telefon || ''}`.toLowerCase().includes(query.toLowerCase())
+  )
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); onChange('') }}
+        onFocus={() => setOpen(true)}
+        placeholder="Müşteri adı yazın..."
+        autoComplete="off"
+        style={{ background:'#1c1c1c', border:`1px solid ${open?'#e63030':'#2a2a2a'}`, borderRadius:'8px', padding:'0.65rem 0.9rem', color:'#fff', fontSize:'0.88rem', fontFamily:'Inter,sans-serif', outline:'none', width:'100%' }}
+      />
+      {open && (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#1a1a1a', border:'1px solid #333', borderRadius:'8px', zIndex:9999, maxHeight:'200px', overflowY:'auto', boxShadow:'0 8px 24px rgba(0,0,0,0.6)' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding:'0.65rem', color:'#555', fontSize:'0.85rem' }}>Müşteri bulunamadı</div>
+          ) : filtered.map(m => (
+            <div key={m.id}
+              onPointerDown={e => { e.preventDefault(); onChange(m.id); setQuery(`${m.ad} ${m.soyad}`); setOpen(false) }}
+              style={{ padding:'0.65rem 0.9rem', color: value===m.id ? '#fff':'#bbb', fontSize:'0.85rem', cursor:'pointer', background: value===m.id ? 'rgba(230,48,48,0.15)':'transparent', userSelect:'none' }}
+              onMouseEnter={e => { if(value!==m.id) e.currentTarget.style.background='rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = value===m.id ? 'rgba(230,48,48,0.15)':'transparent' }}>
+              <div style={{ fontWeight: value===m.id ? 600 : 400 }}>{m.ad} {m.soyad}</div>
+              {m.telefon && <div style={{ fontSize:'0.72rem', color:'#666' }}>{m.telefon}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const IsEmriForm = ({ onKaydet, onIptal }) => {
+  const [aktifTab, setAktifTab] = useState('genel')
+  const [musteriler, setMusteriler] = useState([])
+  const [araclar, setAraclar] = useState([])
+  const [musteriAraclari, setMusteriAraclari] = useState([])
+  const [personel, setPersonel] = useState([])
+  const [parcaListesi, setParcaListesi] = useState([])
+  const [error, setError] = useState('')
+  const [kayitEdiliyor, setKayitEdiliyor] = useState(false)
+
+  // Varsayılan tahmini çıkış bugün
+  const bugunStr = () => {
+    const now = new Date()
+    now.setHours(now.getHours() + 2)
+    return now.toISOString().slice(0, 16)
+  }
+
+  const [form, setForm] = useState({
+    musteri_id: '', arac_id: '', personel_id: '', is_tipi: 'Bakım',
+    oncelik: 'normal', arac_km: '', tahmini_cikis: bugunStr(),
+    sikayet: '', yapilan_isler: '', notlar: '',
+    toplam_tutar: '', odeme_durumu: 'odenmedi', odeme_turu: ''
+  })
+  const [parcalar, setParcalar] = useState([])
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('musteriler').select('id, ad, soyad, telefon').order('ad'),
+      supabase.from('araclar').select('id, plaka, marka, model, musteri_id'),
+      supabase.from('personel').select('id, ad, soyad').eq('aktif', true).order('ad'),
+      supabase.from('parcalar').select('*').eq('aktif', true).order('isim'),
+    ]).then(([m, a, p, prc]) => {
+      setMusteriler(m.data || [])
+      setAraclar(a.data || [])
+      setPersonel(p.data || [])
+      setParcaListesi(prc.data || [])
+    })
+  }, [])
+
+  const handleMusteriSec = (id) => {
+    setForm(f => ({ ...f, musteri_id: id, arac_id: '' }))
+    setMusteriAraclari(araclar.filter(a => a.musteri_id === id))
+  }
+
+  const parcaListeRef = useRef(null)
+  const [parcaForm, setParcaForm] = useState({ parca_id: '', parca_isim: '', miktar: 1, birim_fiyat: 0 })
+
+  const parcaEkle = () => {
+    if (!parcaForm.parca_isim) return
+    const toplam = parseFloat(parcaForm.birim_fiyat || 0) * parseFloat(parcaForm.miktar || 1)
+    setParcalar(prev => [...prev, { ...parcaForm, toplam }])
+    setForm(f => {
+      const yeniToplam = [...parcalar, { ...parcaForm, toplam }].reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+      return { ...f, toplam_tutar: yeniToplam.toFixed(2) }
+    })
+    setParcaForm({ parca_id: '', parca_isim: '', miktar: 1, birim_fiyat: 0 })
+    setTimeout(() => {
+      if (parcaListeRef.current) parcaListeRef.current.scrollTop = parcaListeRef.current.scrollHeight
+    }, 50)
+  }
+
+  const parcaSil = (idx) => {
+    const yeni = parcalar.filter((_, i) => i !== idx)
+    setParcalar(yeni)
+    const t = yeni.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+    setForm(f => ({ ...f, toplam_tutar: t.toFixed(2) }))
+  }
+
+  const parcaGuncelle = (idx, field, value) => {
+    const yeni = [...parcalar]
+    yeni[idx][field] = value
+    if (field === 'parca_id') {
+      const sec = parcaListesi.find(p => p.id === value)
+      if (sec) { yeni[idx].parca_isim = sec.isim; yeni[idx].birim_fiyat = sec.birim_fiyat; yeni[idx].toplam = sec.birim_fiyat * yeni[idx].miktar }
+    }
+    if (field === 'miktar' || field === 'birim_fiyat') {
+      yeni[idx].toplam = parseFloat(yeni[idx].miktar || 0) * parseFloat(yeni[idx].birim_fiyat || 0)
+    }
+    setParcalar(yeni)
+    const toplamParca = yeni.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+    setForm(f => ({ ...f, toplam_tutar: toplamParca.toFixed(2) }))
+  }
+
+  const handleKaydet = async () => {
+    if (!form.musteri_id || !form.arac_id) return setError('Müşteri ve araç seçimi zorunludur.')
+    setKayitEdiliyor(true); setError('')
+    const { data: isEmri, error: isErr } = await supabase.from('is_emirleri').insert({
+      musteri_id: form.musteri_id, arac_id: form.arac_id,
+      personel_id: form.personel_id || null, oncelik: form.oncelik,
+      arac_km: form.arac_km ? parseInt(form.arac_km) : null,
+      tahmini_cikis: form.tahmini_cikis || null,
+      sikayet: form.sikayet,
+      yapilan_isler: form.is_tipi + (form.yapilan_isler ? '\n' + form.yapilan_isler : ''),
+      notlar: form.notlar,
+      toplam_tutar: parseFloat(form.toplam_tutar || 0),
+      odeme_durumu: form.odeme_durumu,
+      odeme_turu: form.odeme_turu || null,
+    }).select().single()
+    if (isErr) { setError(isErr.message); setKayitEdiliyor(false); return }
+    if (parcalar.length > 0 && isEmri) {
+      await supabase.from('is_emri_parcalari').insert(
+        parcalar.filter(p => p.parca_isim).map(p => ({
+          is_emri_id: isEmri.id, parca_id: p.parca_id || null,
+          parca_isim: p.parca_isim, miktar: parseFloat(p.miktar || 1),
+          birim_fiyat: parseFloat(p.birim_fiyat || 0), toplam: parseFloat(p.toplam || 0),
+        }))
+      )
+    }
+    onKaydet(); setKayitEdiliyor(false)
+  }
+
+  const tabStyle = (id) => ({
+    background:'none', border:'none', color: aktifTab===id ? '#e5484d':'var(--text-muted)',
+    fontFamily:'Inter,sans-serif', fontSize:'clamp(11px, 2.5vw, 13px)', fontWeight:600,
+    padding:'0.5rem clamp(6px, 2vw, 14px)', cursor:'pointer',
+    borderBottom: aktifTab===id ? '2px solid #e5484d':'2px solid transparent',
+    marginBottom:'-1px', whiteSpace:'nowrap', flex:1, textAlign:'center'
+  })
+
+  const odemeAktif = form.odeme_durumu === 'kismi' || form.odeme_durumu === 'odendi'
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal modal-wide">
+        <div className="modal-header">
+          <span className="modal-title">Yeni İş Emri</span>
+          <button className="modal-close" onClick={onIptal}>✕</button>
+        </div>
+        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', flexShrink:0, background:'var(--card-bg)' }}>
+          {['genel','islem','parcalar','odeme'].map(t => (
+            <button key={t} style={tabStyle(t)} onClick={() => setAktifTab(t)}>
+              {t==='genel'?'📋 Genel':t==='islem'?'🔧 İşlem':t==='parcalar'?`🔩 Parça (${parcalar.length})`:'💰 Ödeme'}
+            </button>
+          ))}
+        </div>
+        <div className="modal-body" style={{overflowY:'auto', flex:1}}>
+          {error && <div className="alert alert-error">{error}</div>}
+
+          {aktifTab === 'genel' && (
+            <div className="form-grid">
+              <div className="field form-full">
+                <label>Müşteri *</label>
+                <MusteriSelect musteriler={musteriler} value={form.musteri_id} onChange={handleMusteriSec} />
+              </div>
+              <div className="field form-full">
+                <label>Araç *</label>
+                <select value={form.arac_id} onChange={e => setForm({...form, arac_id: e.target.value})} className="field-select" disabled={!form.musteri_id}>
+                  <option value="">{form.musteri_id ? 'Araç seçin' : 'Önce müşteri seçin'}</option>
+                  {musteriAraclari.map(a => <option key={a.id} value={a.id}>{a.plaka} — {a.marka} {a.model}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Teknisyen</label>
+                <select value={form.personel_id} onChange={e => setForm({...form, personel_id: e.target.value})} className="field-select">
+                  <option value="">Seçin</option>
+                  {personel.map(p => <option key={p.id} value={p.id}>{p.ad} {p.soyad}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Öncelik</label>
+                <select value={form.oncelik} onChange={e => setForm({...form, oncelik: e.target.value})} className="field-select">
+                  <option value="düşük">Düşük</option>
+                  <option value="normal">Normal</option>
+                  <option value="yüksek">Yüksek</option>
+                  <option value="acil">Acil</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Araç KM</label>
+                <input type="number" placeholder="15000" value={form.arac_km} onChange={e => setForm({...form, arac_km: e.target.value})} />
+              </div>
+              <div className="field">
+                <label>Tahmini Çıkış</label>
+                <input type="datetime-local" value={form.tahmini_cikis} onChange={e => setForm({...form, tahmini_cikis: e.target.value})} />
+              </div>
+            </div>
+          )}
+
+          {aktifTab === 'islem' && (
+            <div className="form-grid">
+              <div className="field form-full">
+                <label>İşlem Tipi</label>
+                <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', marginTop:'0.25rem' }}>
+                  {IS_TIPLERI.map(t => (
+                    <button key={t} type="button" onClick={() => setForm({...form, is_tipi: t})}
+                      className={`btn btn-sm ${form.is_tipi===t ? 'btn-primary':'btn-secondary'}`}>{t}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="field form-full">
+                <label>Müşteri Şikayeti / Arıza Tanımı</label>
+                <textarea rows={3} placeholder="Müşterinin bildirdiği sorun..." value={form.sikayet} onChange={e => setForm({...form, sikayet: e.target.value})} />
+              </div>
+              <div className="field form-full">
+                <label>Yapılan İşlemler</label>
+                <textarea rows={4} placeholder="Yapılan işlemleri detaylı yazın..." value={form.yapilan_isler} onChange={e => setForm({...form, yapilan_isler: e.target.value})} />
+              </div>
+              <div className="field form-full">
+                <label>Notlar</label>
+                <textarea rows={2} placeholder="Ek notlar..." value={form.notlar} onChange={e => setForm({...form, notlar: e.target.value})} />
+              </div>
+            </div>
+          )}
+
+          {aktifTab === 'parcalar' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+              {/* TEK EKLEME FORMU */}
+              <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.05em' }}>Parça Ekle</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', alignItems: 'flex-end' }}>
+                  <div className="field" style={{ margin: 0, gridColumn: 'span 2' }}>
+                    <label>Parça Ara / Seç</label>
+                    <ParcaAramaSelect
+                      parcaListesi={parcaListesi}
+                      value={parcaForm.parca_id}
+                      inputValue={parcaForm.parca_isim}
+                      onChange={(id, isim, fiyat) => setParcaForm(f => ({ ...f, parca_id: id, parca_isim: isim, birim_fiyat: fiyat }))}
+                      onManual={(isim) => setParcaForm(f => ({ ...f, parca_id: '', parca_isim: isim }))}
+                    />
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label>Miktar</label>
+                    <input type="number" min="1" step="0.5" value={parcaForm.miktar}
+                      onChange={e => setParcaForm(f => ({ ...f, miktar: e.target.value }))} />
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label>Birim Fiyat</label>
+                    <input type="number" min="0" step="0.01" value={parcaForm.birim_fiyat}
+                      onChange={e => setParcaForm(f => ({ ...f, birim_fiyat: e.target.value }))} />
+                  </div>
+                  <button type="button" className="btn btn-primary" onClick={parcaEkle}
+                    style={{ height: '38px', whiteSpace: 'nowrap', alignSelf: 'flex-end' }}>
+                    + Ekle
+                  </button>
+                </div>
+              </div>
+
+              {/* EKLENEN PARÇALAR LİSTESİ */}
+              {parcalar.length === 0 ? (
+                <div className="empty-state" style={{ padding: '1rem' }}>
+                  <div className="empty-state-icon">🔩</div>
+                  <p>Henüz parça eklenmedi</p>
+                </div>
+              ) : (
+                <div ref={parcaListeRef} style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500 }}>Parça</th>
+                        <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '60px' }}>Adet</th>
+                        <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Birim</th>
+                        <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Toplam</th>
+                        <th style={{ width: '36px' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parcalar.map((p, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '7px 8px', color: 'var(--text-primary)' }}>{p.parca_isim}</td>
+                          <td style={{ textAlign: 'center', padding: '7px 8px', color: 'var(--text-secondary)' }}>{p.miktar}</td>
+                          <td style={{ textAlign: 'right', padding: '7px 8px', color: 'var(--text-secondary)' }}>₺{parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
+                          <td style={{ textAlign: 'right', padding: '7px 8px', color: '#22c55e', fontWeight: 600 }}>₺{parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
+                          <td style={{ padding: '7px 4px', textAlign: 'center' }}>
+                            <button type="button" onClick={() => parcaSil(idx)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e5484d', fontSize: '14px', padding: '2px 4px' }}>
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3} style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--text-muted)', fontSize: '12px' }}>Parça Toplamı</td>
+                        <td style={{ textAlign: 'right', padding: '8px 8px', color: '#22c55e', fontWeight: 700, fontSize: '14px' }}>₺{parcalar.reduce((s,p)=>s+parseFloat(p.toplam||0),0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {aktifTab === 'odeme' && (
+            <div className="form-grid">
+              <div className="field form-full">
+                <label>Toplam Tutar (₺)</label>
+                <input type="number" placeholder="0.00" value={form.toplam_tutar} onChange={e => setForm({...form, toplam_tutar: e.target.value})} style={{fontSize:'1.2rem',fontWeight:700}} />
+                {parcalar.length > 0 && <span style={{color:'#888',fontSize:'0.75rem',marginTop:'0.25rem',display:'block'}}>Parça toplamı: ₺{parcalar.reduce((s,p)=>s+parseFloat(p.toplam||0),0).toLocaleString('tr-TR',{minimumFractionDigits:2})} (işçilik ekleyebilirsiniz)</span>}
+              </div>
+              <div className="field form-full">
+                <label>Ödeme Durumu</label>
+                <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.25rem' }}>
+                  {[['odenmedi','Ödenmedi'],['kismi','Kısmi Ödeme'],['odendi','Ödendi']].map(([val,label]) => (
+                    <button key={val} type="button" onClick={() => setForm({...form, odeme_durumu: val, odeme_turu: val==='odenmedi' ? '' : form.odeme_turu})}
+                      className={`btn btn-sm ${form.odeme_durumu===val ? 'btn-primary':'btn-secondary'}`}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="field form-full">
+                <label>Ödeme Türü</label>
+                <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', marginTop:'0.25rem' }}>
+                  {ODEME_TURLERI.map(o => (
+                    <button key={o} type="button"
+                      onClick={() => odemeAktif && setForm({...form, odeme_turu: o})}
+                      className={`btn btn-sm ${form.odeme_turu===o ? 'btn-primary':'btn-secondary'}`}
+                      style={{ opacity: odemeAktif ? 1 : 0.3, cursor: odemeAktif ? 'pointer':'not-allowed' }}>{o}</button>
+                  ))}
+                </div>
+                {!odemeAktif && <p style={{color:'#555',fontSize:'0.75rem',marginTop:'0.4rem'}}>Ödeme durumunu "Kısmi" veya "Ödendi" seçince aktif olur</p>}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onIptal}>İptal</button>
+          <button className="btn btn-primary" onClick={handleKaydet} disabled={kayitEdiliyor}>{kayitEdiliyor ? 'Kaydediliyor...' : '✅ İş Emri Oluştur'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+const ServisFormuModal = ({ is: isEmri, onKapat }) => {
+  const [parcalar, setParcalar] = useState([])
+  const [printBlocked, setPrintBlocked] = useState(false)
+
+  useEffect(() => {
+    supabase.from('is_emri_parcalari').select('*').eq('is_emri_id', isEmri.id).order('created_at')
+      .then(({ data }) => setParcalar(data || []))
+  }, [isEmri.id])
+
+  const handlePrint = async () => {
+    // Parçaları taze çek
+    const { data: tazeParcalar } = await supabase
+      .from('is_emri_parcalari').select('*').eq('is_emri_id', isEmri.id).order('created_at')
+    const guncelParcalar = tazeParcalar || []
+    const genelToplam = guncelParcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+
+    const parcalarHTML = guncelParcalar.length > 0
+      ? guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td><td style="text-align:right">&#x20BA;${parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td><td style="text-align:right">&#x20BA;${parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
+
+    const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Servis Formu #${isEmri.is_emri_no}</title><style>
+*{box-sizing:border-box;margin:0;padding:0} @page{size:A4;margin:10mm;} @media print{body{margin:0} thead{display:table-header-group} tfoot{display:table-footer-group} a[href]:after{content:none!important}}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1a1a1a;background:#fff;padding:24px 28px;max-width:800px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:2.5px solid #1a1a1a}
+.logo-area{display:flex;align-items:center;gap:12px}
+.logo-img{width:52px;height:52px;object-fit:contain}
+.brand{font-size:20px;font-weight:700;letter-spacing:.12em;color:#1a1a1a}
+.brand-sub{font-size:10px;color:#666;margin-top:3px}
+.doc-info{text-align:right}
+.doc-title{font-size:11px;font-weight:700;color:#e5484d;text-transform:uppercase;letter-spacing:.06em}
+.doc-no{font-size:26px;font-weight:700;color:#1a1a1a;margin-top:2px}
+.doc-date{font-size:10px;color:#888;margin-top:3px}
+.status-ok{display:inline-block;background:#e8f8ef;border:1px solid #86efb5;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;color:#166534;margin-top:6px}
+.sec-title{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.1em;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid #e0e0e0}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.mt8{margin-top:8px}
+.fbox{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:8px 11px}
+.flbl{font-size:8.5px;color:#999;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
+.fval{font-size:12.5px;font-weight:600;color:#1a1a1a}
+.fval.red{color:#e5484d}
+.fval.green{color:#22a05b}
+.notlar{background:#fffbf0;border:1px solid #f0e0a0;border-radius:6px;padding:9px 12px;font-size:11.5px;color:#555;line-height:1.6;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:5px}
+thead th{background:#1a1a1a;color:#fff;padding:7px 10px;text-align:left;font-size:10px;font-weight:600}
+tbody td{padding:8px 10px;border-bottom:1px solid #f0f0f0;color:#333}
+.tot-row td{background:#f5f5f5;font-weight:700;border-top:2px solid #ddd;color:#1a1a1a}
+.onay-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:5px}
+.onay-box{border:1.5px solid #ddd;border-radius:7px;padding:14px}
+.onay-t{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:28px}
+.onay-b{border-top:1px solid #ccc;padding-top:7px;font-size:9px;color:#aaa;text-align:center}
+.footer{margin-top:18px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:9px;color:#bbb}
+@media print{@page{margin:10mm;size:A4;} @page{margin-top:10mm;margin-bottom:10mm;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}} @media print{a[href]:after{content:none!important}} * { -webkit-print-color-adjust: exact; }
+</style></head><body>
+<div class="header">
+  <div class="logo-area">
+    <img src="${window.location.origin}/logo.png" class="logo-img" onerror="this.style.display='none'">
+    <div><div class="brand">MOTORCUM</div><div class="brand-sub">Motor Servis Yonetim Sistemi</div></div>
+  </div>
+  <div class="doc-info">
+    <div class="doc-title">Servis Formu</div>
+    <div class="doc-no">#${isEmri.is_emri_no}</div>
+    <div class="doc-date">${new Date(isEmri.created_at).toLocaleDateString('tr-TR')}</div>
+    <div><span class="status-ok">&#10003; Tamamlandi</span></div>
+  </div>
+</div>
+<div class="sec-title">Musteri Bilgileri</div>
+<div class="two-col">
+  <div class="fbox"><div class="flbl">Ad Soyad</div><div class="fval">${isEmri.musteriler?.ad||''} ${isEmri.musteriler?.soyad||''}</div></div>
+  <div class="fbox"><div class="flbl">Telefon</div><div class="fval">${isEmri.musteriler?.telefon||'-'}</div></div>
+</div>
+<div class="sec-title">Arac Bilgileri</div>
+<div class="three-col">
+  <div class="fbox"><div class="flbl">Plaka</div><div class="fval red">${isEmri.araclar?.plaka||'-'}</div></div>
+  <div class="fbox"><div class="flbl">Marka / Model</div><div class="fval">${isEmri.araclar?.marka||''} ${isEmri.araclar?.model||''}</div></div>
+  <div class="fbox"><div class="flbl">Yil / Renk</div><div class="fval">${isEmri.araclar?.yil||'-'} / ${isEmri.araclar?.renk||'-'}</div></div>
+</div>
+<div class="two-col mt8">
+  <div class="fbox"><div class="flbl">Kilometre</div><div class="fval">${isEmri.arac_km?Number(isEmri.arac_km).toLocaleString('tr-TR')+' km':'-'}</div></div>
+  <div class="fbox"><div class="flbl">Teknisyen</div><div class="fval">${isEmri.personel?isEmri.personel.ad+' '+isEmri.personel.soyad:'-'}</div></div>
+</div>
+${isEmri.sikayet?'<div class="sec-title">Musteri Sikayeti</div><div class="notlar">'+isEmri.sikayet+'</div>':''}
+${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class="notlar">'+isEmri.yapilan_isler+'</div>':''}
+<div class="sec-title">Parcalar ve Islem Bedeli</div>
+<table>
+  <thead><tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr></thead>
+  <tbody>${parcalarHTML}<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;${genelToplam > 0 ? genelToplam.toLocaleString('tr-TR',{minimumFractionDigits:2}) : (isEmri.toplam_tutar||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr></tbody>
+</table>
+<div class="sec-title">Odeme Bilgisi</div>
+<div class="three-col">
+  <div class="fbox"><div class="flbl">Odeme Durumu</div><div class="fval ${isEmri.odeme_durumu==='odendi'?'green':''}">${isEmri.odeme_durumu==='odendi'?'&#10003; Odendi':isEmri.odeme_durumu==='kismi'?'Kismi':'-'}</div></div>
+  <div class="fbox"><div class="flbl">Odeme Turu</div><div class="fval">${isEmri.odeme_turu||'-'}</div></div>
+  <div class="fbox"><div class="flbl">Tarih</div><div class="fval">${new Date(isEmri.created_at).toLocaleDateString('tr-TR')}</div></div>
+</div>
+${isEmri.notlar?'<div class="sec-title">Notlar</div><div class="notlar">'+isEmri.notlar+'</div>':''}
+<div class="sec-title">Onay</div>
+<div class="onay-grid">
+  <div class="onay-box"><div class="onay-t">Yetkili Imza</div><div class="onay-b">Ad Soyad / Kase</div></div>
+  <div class="onay-box"><div class="onay-t">Musteri Imzasi</div><div class="onay-b">Araci teslim aldim</div></div>
+</div>
+<div class="footer">
+  <div>MOTORCUM Servis Yonetim Sistemi</div>
+  <div>Is Emri #${isEmri.is_emri_no} &middot; ${new Date().toLocaleString('tr-TR')}</div>
+</div>
+</body></html>`
+
+    // iframe ile print - popup engelini aşar
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;background:white'
+    document.body.appendChild(iframe)
+    iframe.contentDocument.open()
+    iframe.contentDocument.write(html)
+    iframe.contentDocument.close()
+    iframe.contentWindow.focus()
+    setTimeout(() => {
+      iframe.contentWindow.print()
+      setTimeout(() => document.body.removeChild(iframe), 1000)
+    }, 600)
+    setPrintBlocked(false)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onKapat}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:420}}>
+        <div className="modal-header">
+          <span className="modal-title">🖨️ İş Emri #{isEmri.is_emri_no} — Servis Formu</span>
+          <button className="modal-close" onClick={onKapat}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'8px',padding:'12px',marginBottom:'12px',fontSize:'12px',color:'var(--text-secondary)',lineHeight:1.6}}>
+            <div style={{fontWeight:600,color:'var(--text-primary)',marginBottom:'6px'}}>📋 Form içeriği:</div>
+            <div>✓ Müşteri bilgileri</div>
+            <div>✓ Araç bilgileri (plaka, marka, model, km)</div>
+            <div>✓ Müşteri şikayeti ve yapılan işlemler</div>
+            <div>✓ Parçalar ve tutar ({parcalar.length} kalem)</div>
+            <div>✓ Ödeme bilgisi</div>
+            <div>✓ İmza alanları</div>
+          </div>
+          <div style={{display:'flex',gap:'8px',flexDirection:'column'}}>
+            <button className="btn btn-primary" style={{width:'100%',height:40,fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}
+              onClick={handlePrint}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
+              Çıktı Al
+            </button>
+            {printBlocked && (
+              <div style={{background:'rgba(245,166,35,.1)',border:'1px solid rgba(245,166,35,.3)',borderRadius:'7px',padding:'10px 12px',fontSize:'12px',color:'#f5a623',lineHeight:1.5}}>
+                ⚠️ Tarayıcı popup'u engelledi. Adres çubuğunun sağındaki <strong>popup engeli ikonuna</strong> tıklayıp <strong>"motorcum.vercel.app için her zaman izin ver"</strong> seçeneğini seçin, sonra tekrar deneyin.
+              </div>
+            )}
+            <button className="btn btn-secondary" style={{width:'100%',height:40,fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}
+              onClick={() => alert('Bu özellik yakında: Müşterinin iletişim tercihine göre (SMS / Mail) servis formu gönderilecek.')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.4a16 16 0 0 0 5.55 5.55l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.92"/></svg>
+              Müşteriye Bildirim Gönder
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const ParcaAramaSelect = ({ parcaListesi, value, inputValue, onChange, onManual }) => {
+  const [query, setQuery] = useState(inputValue || '')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => { setQuery(inputValue || '') }, [inputValue])
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('pointerdown', h)
+    return () => document.removeEventListener('pointerdown', h)
+  }, [])
+
+  const filtered = parcaListesi.filter(p =>
+    p.isim.toLowerCase().includes(query.toLowerCase()) ||
+    (p.kod && p.kod.toLowerCase().includes(query.toLowerCase()))
+  )
+
+  return (
+    <div ref={ref} style={{position:'relative'}}>
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); onManual(e.target.value) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Parça adı yazın veya listeden seçin..."
+        autoComplete="off"
+        style={{background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:'7px', padding:'7px 10px', color:'var(--text-primary)', fontSize:'13px', fontFamily:'Inter,sans-serif', outline:'none', width:'100%', transition:'border-color .12s'}}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'8px', zIndex:9999, maxHeight:'200px', overflowY:'auto', boxShadow:'var(--shadow)'}}>
+          {filtered.map(p => (
+            <div key={p.id}
+              onPointerDown={e => { e.preventDefault(); onChange(p.id, p.isim, p.birim_fiyat); setQuery(p.isim); setOpen(false) }}
+              style={{padding:'8px 12px', cursor:'pointer', fontSize:'12.5px', display:'flex', justifyContent:'space-between', alignItems:'center', color: value===p.id ? 'var(--text-primary)' : 'var(--text-secondary)', background: value===p.id ? 'rgba(229,72,77,.08)' : 'transparent'}}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+              onMouseLeave={e => e.currentTarget.style.background = value===p.id ? 'rgba(229,72,77,.08)' : 'transparent'}
+            >
+              <span>{p.isim} {p.kod && <span style={{color:'var(--text-muted)',fontSize:'11px'}}>({p.kod})</span>}</span>
+              <span style={{color:'#22c55e', fontWeight:600, fontSize:'12px'}}>₺{parseFloat(p.birim_fiyat||0).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutarGuncelle }) => {
+  const [parcaListesi, setParcaListesi] = useState([])
+  const [yeniParca, setYeniParca] = useState({ parca_id: '', parca_isim: '', miktar: 1, birim_fiyat: 0 })
+  const [ekleniyor, setEkleniyor] = useState(false)
+  const [formAcik, setFormAcik] = useState(false)
+
+  useEffect(() => {
+    supabase.from('parcalar').select('*').eq('aktif', true).order('isim')
+      .then(({ data }) => setParcaListesi(data || []))
+  }, [])
+
+  const handleParcaSec = (id) => {
+    const sec = parcaListesi.find(p => p.id === id)
+    if (sec) setYeniParca(prev => ({ ...prev, parca_id: id, parca_isim: sec.isim, birim_fiyat: sec.birim_fiyat }))
+    else setYeniParca(prev => ({ ...prev, parca_id: id }))
+  }
+
+  const handleEkle = async () => {
+    if (!yeniParca.parca_isim.trim()) return
+    setEkleniyor(true)
+    const toplam = parseFloat(yeniParca.miktar || 1) * parseFloat(yeniParca.birim_fiyat || 0)
+    const { data, error } = await supabase.from('is_emri_parcalari').insert({
+      is_emri_id: isEmriId,
+      parca_id: yeniParca.parca_id || null,
+      parca_isim: yeniParca.parca_isim,
+      miktar: parseFloat(yeniParca.miktar || 1),
+      birim_fiyat: parseFloat(yeniParca.birim_fiyat || 0),
+      toplam,
+    }).select().single()
+    if (!error && data) {
+      const yeniParcalar = [...parcalar, data]
+      setParcalar(yeniParcalar)
+      // Toplam tutarı güncelle
+      const yeniToplam = yeniParcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+      await supabase.from('is_emirleri').update({ toplam_tutar: yeniToplam }).eq('id', isEmriId)
+      if (onTutarGuncelle) onTutarGuncelle(yeniToplam)
+      setYeniParca({ parca_id: '', parca_isim: '', miktar: 1, birim_fiyat: 0 })
+      setFormAcik(false)
+    }
+    setEkleniyor(false)
+  }
+
+  const handleSil = async (id) => {
+    if (!confirm('Bu parçayı silmek istediğinize emin misiniz?')) return
+    await supabase.from('is_emri_parcalari').delete().eq('id', id)
+    const kalanlar = parcalar.filter(p => p.id !== id)
+    setParcalar(kalanlar)
+    const yeniToplam = kalanlar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+    await supabase.from('is_emirleri').update({ toplam_tutar: yeniToplam }).eq('id', isEmriId)
+    if (onTutarGuncelle) onTutarGuncelle(yeniToplam)
+  }
+
+  const toplam = parcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+
+  return (
+    <div>
+      {!kapali && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+          <button className="btn btn-primary btn-sm" onClick={() => setFormAcik(!formAcik)}>
+            {formAcik ? '✕ İptal' : '+ Parça Ekle'}
+          </button>
+        </div>
+      )}
+
+      {formAcik && (
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+          <div className="form-grid" style={{ gap: '0.5rem' }}>
+            <div className="field form-full">
+              <label>Parça Ara / Seç</label>
+              <ParcaAramaSelect
+                parcaListesi={parcaListesi}
+                value={yeniParca.parca_id}
+                inputValue={yeniParca.parca_isim}
+                onChange={(id, isim, fiyat) => setYeniParca(p => ({...p, parca_id: id, parca_isim: isim, birim_fiyat: fiyat}))}
+                onManual={(isim) => setYeniParca(p => ({...p, parca_id: '', parca_isim: isim}))}
+              />
+            </div>
+            <div className="field">
+              <label>Miktar</label>
+              <input type="number" min="1" step="0.5" value={yeniParca.miktar} onChange={e => setYeniParca(p => ({ ...p, miktar: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label>Birim Fiyat (₺)</label>
+              <input type="number" min="0" step="0.01" value={yeniParca.birim_fiyat} onChange={e => setYeniParca(p => ({ ...p, birim_fiyat: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+            <button className="btn btn-primary btn-sm" onClick={handleEkle} disabled={ekleniyor}>
+              {ekleniyor ? 'Ekleniyor...' : '✅ Ekle'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {parcalar.length === 0 ? (
+        <div className="empty-state"><div className="empty-state-icon">🔩</div><p>Parça kaydı yok</p></div>
+      ) : (
+        <>
+          <table>
+            <thead><tr><th>Parça</th><th>Miktar</th><th>Birim Fiyat</th><th>Toplam</th><th></th></tr></thead>
+            <tbody>
+              {parcalar.map(p => (
+                <tr key={p.id}>
+                  <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{p.parca_isim}</td>
+                  <td>{p.miktar}</td>
+                  <td>₺{parseFloat(p.birim_fiyat || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ color: '#22c55e', fontWeight: 600 }}>₺{parseFloat(p.toplam || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                  <td>{!kapali && <button className="btn btn-danger btn-sm" onClick={() => handleSil(p.id)}>🗑️</button>}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: '2px solid var(--border)' }}>
+                <td colSpan={3} style={{ textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 }}>Toplam:</td>
+                <td style={{ color: '#22c55e', fontWeight: 700 }}>₺{toplam.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  )
+}
+
+const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, onYazdir }) => {
+  const [isEmri, setIsEmri] = useState(initialIs)
+  const [parcalar, setParcalar] = useState([])
+  const [aktifTab, setAktifTab] = useState('detay')
+  const [personelList, setPersonelList] = useState([])
+  const [duzenle, setDuzenle] = useState(false)
+  const [form, setForm] = useState({
+    personel_id: initialIs.personel_id || '',
+    sikayet: initialIs.sikayet || '',
+    yapilan_isler: initialIs.yapilan_isler || '',
+    notlar: initialIs.notlar || '',
+    arac_km: initialIs.arac_km || '',
+    toplam_tutar: initialIs.toplam_tutar || '',
+    odeme_durumu: initialIs.odeme_durumu || 'odenmedi',
+    odeme_turu: initialIs.odeme_turu || '',
+    tahmini_cikis: initialIs.tahmini_cikis ? initialIs.tahmini_cikis.slice(0,16) : '',
+  })
+  const [kaydediliyor, setKaydediliyor] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const kapali = ['tamamlandi', 'teslim_edildi', 'iptal'].includes(isEmri.durum)
+
+  useEffect(() => {
+    supabase.from('is_emri_parcalari').select('*').eq('is_emri_id', isEmri.id).order('created_at')
+      .then(({ data }) => setParcalar(data || []))
+    supabase.from('personel').select('id, ad, soyad').eq('aktif', true).order('ad')
+      .then(({ data }) => setPersonelList(data || []))
+  }, [isEmri.id])
+
+  const handleKaydet = async () => {
+    setKaydediliyor(true)
+    const { error } = await supabase.from('is_emirleri').update({
+      personel_id: form.personel_id || null,
+      sikayet: form.sikayet,
+      yapilan_isler: form.yapilan_isler,
+      notlar: form.notlar,
+      arac_km: form.arac_km ? parseInt(form.arac_km) : null,
+      toplam_tutar: parseFloat(form.toplam_tutar || 0),
+      odeme_durumu: form.odeme_durumu,
+      odeme_turu: form.odeme_turu || null,
+      tahmini_cikis: form.tahmini_cikis || null,
+    }).eq('id', isEmri.id)
+    if (!error) {
+      const yeniPersonel = personelList.find(p => p.id === form.personel_id)
+      setIsEmri(prev => ({ ...prev, ...form, personel: yeniPersonel || prev.personel }))
+      setDuzenle(false)
+      setMsg('✅ Kaydedildi!')
+      setTimeout(() => setMsg(''), 3000)
+      if (onGuncellendi) onGuncellendi()
+    }
+    setKaydediliyor(false)
+  }
+
+  const handleDurumDegistir = async (yeniDurum) => {
+    await supabase.from('is_emirleri').update({ durum: yeniDurum }).eq('id', isEmri.id)
+    setIsEmri(prev => ({ ...prev, durum: yeniDurum }))
+    if (onDurumGuncelle) onDurumGuncelle(isEmri.id, yeniDurum, null)
+  }
+
+  const handleOdemeDegistir = async (yeniOdeme) => {
+    await supabase.from('is_emirleri').update({ odeme_durumu: yeniOdeme }).eq('id', isEmri.id)
+    setIsEmri(prev => ({ ...prev, odeme_durumu: yeniOdeme }))
+    setForm(prev => ({ ...prev, odeme_durumu: yeniOdeme }))
+    if (onDurumGuncelle) onDurumGuncelle(isEmri.id, null, yeniOdeme)
+  }
+
+  const durumBadge = (d) => {
+    const map = { bekliyor:['badge-bekliyor','Bekliyor'], devam_ediyor:['badge-devam','Devam Ediyor'], tamamlandi:['badge-tamamlandi','Tamamlandı'], teslim_edildi:['badge-teslim','Teslim Edildi'], iptal:['badge-iptal','İptal'] }
+    const [cls,label] = map[d]||['badge-normal',d]
+    return <span className={`badge ${cls}`}>{label}</span>
+  }
+
+  const odemeBadge = (d) => {
+    const map = { odenmedi:['badge-odenmedi','Ödenmedi'], kismi:['badge-kismi','Kısmi'], odendi:['badge-odendi','Ödendi'] }
+    const [cls,label] = map[d]||['badge-normal',d]
+    return <span className={`badge ${cls}`}>{label}</span>
+  }
+
+  const tabStyle = (id) => ({
+    background:'none', border:'none',
+    color: aktifTab===id ? '#e5484d':'var(--text-muted)',
+    fontFamily:'Inter,sans-serif', fontSize:'clamp(11px, 2.5vw, 13px)', fontWeight:600,
+    padding:'0.5rem clamp(8px, 2vw, 16px)', cursor:'pointer',
+    borderBottom: aktifTab===id ? '2px solid #e5484d':'2px solid transparent',
+    marginBottom:'-1px', whiteSpace:'nowrap', transition:'color .12s', flex:1, textAlign:'center'
+  })
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal modal-wide">
+        <div className="modal-header">
+          <div>
+            <span className="modal-title">İş Emri #{isEmri.is_emri_no}</span>
+            <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.3rem', alignItems:'center' }}>
+              {durumBadge(isEmri.durum)}
+              {odemeBadge(isEmri.odeme_durumu)}
+              {kapali && <span style={{fontSize:'0.75rem',color:'var(--text-muted)',background:'var(--bg-elevated)',padding:'2px 8px',borderRadius:'20px',border:'1px solid var(--border)'}}>🔒 Kilitli</span>}
+            </div>
+          </div>
+          <button className="modal-close" onClick={onKapat}>✕</button>
+        </div>
+
+        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+          <button style={tabStyle('detay')} onClick={() => setAktifTab('detay')}>📋 Detay</button>
+          <button style={tabStyle('parcalar')} onClick={() => setAktifTab('parcalar')}>🔩 Parça ({parcalar.length})</button>
+          <button style={tabStyle('islemler')} onClick={() => setAktifTab('islemler')}>🔧 İşlem</button>
+          <button style={tabStyle('durum')} onClick={() => setAktifTab('durum')}>🔄 Durum</button>
+        </div>
+
+        <div className="modal-body">
+          {msg && <div className="alert alert-success" style={{marginBottom:'0.75rem'}}>{msg}</div>}
+
+          {/* DETAY SEKMESİ */}
+          {aktifTab === 'detay' && (
+            <div>
+              {!kapali && (
+                <div style={{display:'flex',justifyContent:'flex-end',marginBottom:'0.75rem',gap:'0.5rem'}}>
+                  {duzenle
+                    ? <>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(false)}>İptal</button>
+                        <button className="btn btn-primary btn-sm" onClick={handleKaydet} disabled={kaydediliyor}>{kaydediliyor ? 'Kaydediliyor...' : '💾 Kaydet'}</button>
+                      </>
+                    : <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(true)}>✏️ Düzenle</button>
+                  }
+                </div>
+              )}
+              <div className="form-grid">
+                <div className="field"><label>Müşteri</label><input readOnly value={`${isEmri.musteriler?.ad||''} ${isEmri.musteriler?.soyad||''}`} /></div>
+                <div className="field"><label>Araç</label><input readOnly value={`${isEmri.araclar?.plaka||''} — ${isEmri.araclar?.marka||''} ${isEmri.araclar?.model||''}`} /></div>
+                <div className="field"><label>Kayıt Tarihi</label><input readOnly value={new Date(isEmri.created_at).toLocaleString('tr-TR')} /></div>
+                <div className="field">
+                  <label>Tahmini Çıkış</label>
+                  {duzenle
+                    ? <input type="datetime-local" value={form.tahmini_cikis} onChange={e => setForm(f => ({...f, tahmini_cikis: e.target.value}))} />
+                    : <input readOnly value={isEmri.tahmini_cikis ? new Date(isEmri.tahmini_cikis).toLocaleString('tr-TR') : '-'} />
+                  }
+                </div>
+                <div className="field">
+                  <label>Araç KM</label>
+                  {duzenle
+                    ? <input type="number" value={form.arac_km} onChange={e => setForm(f => ({...f, arac_km: e.target.value}))} />
+                    : <input readOnly value={isEmri.arac_km || '-'} />
+                  }
+                </div>
+                <div className="field">
+                  <label>Toplam Tutar (₺)</label>
+                  {duzenle
+                    ? <input type="number" value={form.toplam_tutar} onChange={e => setForm(f => ({...f, toplam_tutar: e.target.value}))} />
+                    : <input readOnly value={`₺${(isEmri.toplam_tutar||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}`} style={{color:'#22c55e',fontWeight:700}} />
+                  }
+                </div>
+                <div className="field form-full">
+                  <label>Müşteri Şikayeti</label>
+                  {duzenle
+                    ? <textarea rows={2} value={form.sikayet} onChange={e => setForm(f => ({...f, sikayet: e.target.value}))} />
+                    : <textarea readOnly rows={2} value={isEmri.sikayet || '-'} />
+                  }
+                </div>
+                <div className="field form-full">
+                  <label>Yapılan İşlemler</label>
+                  {duzenle
+                    ? <textarea rows={3} value={form.yapilan_isler} onChange={e => setForm(f => ({...f, yapilan_isler: e.target.value}))} />
+                    : <textarea readOnly rows={3} value={isEmri.yapilan_isler || '-'} />
+                  }
+                </div>
+                <div className="field form-full">
+                  <label>Notlar</label>
+                  {duzenle
+                    ? <textarea rows={2} value={form.notlar} onChange={e => setForm(f => ({...f, notlar: e.target.value}))} />
+                    : <textarea readOnly rows={2} value={isEmri.notlar || '-'} />
+                  }
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PARÇALAR SEKMESİ */}
+          {aktifTab === 'parcalar' && (
+            <ParcaYonetim isEmriId={isEmri.id} parcalar={parcalar} setParcalar={setParcalar} kapali={kapali} onTutarGuncelle={(t) => setIsEmri(prev => ({...prev, toplam_tutar: t}))} />
+          )}
+
+          {/* İŞLEMLER SEKMESİ */}
+          {aktifTab === 'islemler' && (
+            <div className="form-grid">
+              <div className="field form-full">
+                <label>Teknisyen / Sorumlu</label>
+                {duzenle && !kapali ? (
+                  <select className="field-select" value={form.personel_id || ''} onChange={e => setForm(f => ({...f, personel_id: e.target.value}))}>
+                    <option value="">— Seçin</option>
+                    {personelList.map(p => <option key={p.id} value={p.id}>{p.ad} {p.soyad}</option>)}
+                  </select>
+                ) : (
+                  <input readOnly value={isEmri.personel ? `${isEmri.personel.ad} ${isEmri.personel.soyad}` : '-'} />
+                )}
+              </div>
+              <div className="field form-full">
+                <label>Müşteri Şikayeti</label>
+                {duzenle
+                  ? <textarea rows={2} value={form.sikayet} onChange={e => setForm(f => ({...f, sikayet: e.target.value}))} />
+                  : <textarea readOnly rows={2} value={isEmri.sikayet || '-'} />
+                }
+              </div>
+              <div className="field form-full">
+                <label>Yapılan İşlemler</label>
+                {duzenle
+                  ? <textarea rows={3} value={form.yapilan_isler} onChange={e => setForm(f => ({...f, yapilan_isler: e.target.value}))} />
+                  : <textarea readOnly rows={3} value={isEmri.yapilan_isler || '-'} />
+                }
+              </div>
+              <div className="field form-full">
+                <label>Notlar</label>
+                {duzenle
+                  ? <textarea rows={2} value={form.notlar} onChange={e => setForm(f => ({...f, notlar: e.target.value}))} />
+                  : <textarea readOnly rows={2} value={isEmri.notlar || '-'} />
+                }
+              </div>
+              {!kapali && (
+                <div className="field form-full" style={{display:'flex',justifyContent:'flex-end',gap:'0.5rem'}}>
+                  {duzenle
+                    ? <>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(false)}>İptal</button>
+                        <button className="btn btn-primary btn-sm" onClick={handleKaydet} disabled={kaydediliyor}>{kaydediliyor ? 'Kaydediliyor...' : '💾 Kaydet'}</button>
+                      </>
+                    : <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(true)}>✏️ Düzenle</button>
+                  }
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* DURUM SEKMESİ */}
+          {aktifTab === 'durum' && (
+            <div style={{display:'flex',flexDirection:'column',gap:'1.25rem'}}>
+
+              {/* İŞ EMRİ DURUMU */}
+              <div>
+                <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px'}}>
+                  İş Emri Durumu
+                </div>
+                {kapali ? (
+                  <div>
+                    <div className="alert alert-error" style={{marginBottom:'0.75rem'}}>🔒 Bu iş emri kapalı — durum değiştirilemez.</div>
+                    <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                      <button className="btn btn-secondary btn-sm" onClick={async () => {
+                        if (window.confirm('Bu iş emrini yeniden açmak istediğinize emin misiniz?')) {
+                          await handleDurumDegistir('devam_ediyor')
+                        }
+                      }}>🔓 Yeniden Aç</button>
+                      {['tamamlandi','teslim_edildi'].includes(isEmri.durum) && (
+                        <button className="btn btn-primary btn-sm" style={{display:'flex',alignItems:'center',gap:'5px'}}
+                          onClick={async () => {
+                            // Taze veri çek, çıktıda güncel bilgiler olsun
+                            const { data: taze } = await supabase
+                              .from('is_emirleri')
+                              .select('*, musteriler(ad, soyad, telefon), araclar(plaka, marka, model, yil, renk, km), personel(ad, soyad)')
+                              .eq('id', isEmri.id)
+                              .single()
+                            onYazdir && onYazdir(taze || isEmri)
+                          }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
+                          Çıktı Al
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>
+                    {DURUMLAR.map(d => (
+                      <button key={d}
+                        className={`btn btn-sm ${isEmri.durum===d?'btn-primary':'btn-secondary'}`}
+                        onClick={() => handleDurumDegistir(d)}>
+                        {DURUMLAR_TR[d]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ÖDEME DURUMU */}
+              <div>
+                <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px'}}>
+                  Ödeme Durumu
+                </div>
+                <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                  {[['odenmedi','Ödenmedi','#e5484d'],['kismi','Kısmi Ödeme','#f5a623'],['odendi','Ödendi','#22c55e']].map(([val,label,color]) => (
+                    <button key={val} type="button"
+                      className={`btn btn-sm ${isEmri.odeme_durumu===val ? 'btn-primary' : 'btn-secondary'}`}
+                      style={isEmri.odeme_durumu===val ? {background:color,borderColor:color} : {}}
+                      onClick={() => handleOdemeDegistir(val)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ÖDEME TÜRÜ */}
+              {isEmri.odeme_durumu !== 'odenmedi' && (
+                <div>
+                  <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px'}}>
+                    Ödeme Türü
+                  </div>
+                  <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                    {ODEME_TURLERI.map(o => (
+                      <button key={o} type="button"
+                        className={`btn btn-sm ${isEmri.odeme_turu===o ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={async () => {
+                          await supabase.from('is_emirleri').update({odeme_turu: o}).eq('id', isEmri.id)
+                          setIsEmri(prev => ({ ...prev, odeme_turu: o }))
+                          setForm(prev => ({ ...prev, odeme_turu: o }))
+                          onGuncellendi && onGuncellendi()
+                        }}>
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
+  const { profile } = useAuth()
+  const rakamGizli = ['teknisyen', 'kullanici'].includes(profile?.rol)
+  const sinirliGorus = ['teknisyen', 'kullanici'].includes(profile?.rol)
+  const [isler, setIsler] = useState([])
+  const [kisiselPersonelId, setKisiselPersonelId] = useState(null)
+  const [arama, setArama] = useState('')
+  const [musteriFiltre, setMusteriFiltre] = useState('')
+  const [personelFiltre, setPersonelFiltre] = useState('')
+  const [durumFiltre, setDurumFiltre] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [modalAcik, setModalAcik] = useState(false)
+  const [detayModal, setDetayModal] = useState(null)
+  const [yazdirModal, setYazdirModal] = useState(null)
+  const [musteriler, setMusteriler] = useState([])
+  const [personelList, setPersonelList] = useState([])
+
+  useEffect(() => { if (profile) fetchData() }, [profile])
+
+  useEffect(() => {
+    if (acikIsEmri) {
+      setDetayModal(acikIsEmri)
+      if (onAcikIsEmriTemizle) onAcikIsEmriTemizle()
+    }
+  }, [acikIsEmri])
+
+  const fetchData = async () => {
+    if (!profile) return
+
+    const sinirli = ['teknisyen', 'kullanici'].includes(profile?.rol)
+
+    // Sinirli rol ise önce personel tablosundan kendi id'sini bul
+    let personelId = null
+    if (sinirli && profile?.email) {
+      const { data: pData } = await supabase
+        .from('personel')
+        .select('id')
+        .eq('email', profile.email)
+        .maybeSingle()
+      personelId = pData?.id || null
+      setKisiselPersonelId(personelId)
+    }
+
+    let isQuery = supabase
+      .from('is_emirleri')
+      .select('*, musteriler(ad, soyad, telefon), araclar(plaka, marka, model, yil, renk, km), personel(ad, soyad)')
+      .order('created_at', { ascending: false })
+
+    // Sinirli rol ise sadece kendi işlerini getir
+    if (sinirli) {
+      if (personelId) {
+        isQuery = isQuery.eq('personel_id', personelId)
+      } else {
+        // Personel kaydı yoksa hiç iş gösterme
+        setIsler([])
+        setMusteriler([])
+        setPersonelList([])
+        setLoading(false)
+        return
+      }
+    }
+
+    const [isRes, mRes, pRes] = await Promise.all([
+      isQuery,
+      supabase.from('musteriler').select('id, ad, soyad').order('ad'),
+      supabase.from('personel').select('id, ad, soyad').eq('aktif', true).order('ad'),
+    ])
+    setIsler(isRes.data || [])
+    setMusteriler(mRes.data || [])
+    setPersonelList(pRes.data || [])
+    setLoading(false)
+  }
+
+  const handleDurumGuncelle = async (id, yeniDurum, yeniOdeme) => {
+    const g = {}
+    if (yeniDurum) g.durum = yeniDurum
+    if (yeniOdeme) g.odeme_durumu = yeniOdeme
+    await supabase.from('is_emirleri').update(g).eq('id', id)
+    fetchData()
+    if (detayModal?.id === id) setDetayModal(prev => ({...prev, ...g}))
+  }
+
+  const durumBadge = (d) => {
+    const map = { bekliyor:['badge-bekliyor','Bekliyor'], devam_ediyor:['badge-devam','Devam Ediyor'], tamamlandi:['badge-tamamlandi','Tamamlandı'], teslim_edildi:['badge-teslim','Teslim Edildi'], iptal:['badge-iptal','İptal'] }
+    const [cls,label] = map[d]||['badge-normal',d]
+    return <span className={`badge ${cls}`}>{label}</span>
+  }
+
+  // Aktif işler: bekliyor + devam_ediyor — tümü göster
+  const aktifIsler = isler.filter(i => {
+    const q = arama.toLowerCase()
+    const aramaUy = !q || `${i.musteriler?.ad} ${i.musteriler?.soyad} ${i.araclar?.plaka} ${i.is_emri_no}`.toLowerCase().includes(q)
+    const musteriUy = !musteriFiltre || i.musteri_id === musteriFiltre
+    const personelUy = !personelFiltre || i.personel_id === personelFiltre
+    return aramaUy && musteriUy && personelUy && ['bekliyor', 'devam_ediyor'].includes(i.durum)
+  })
+
+  // Tamamlanan işler: tamamlandi + teslim_edildi + iptal — son 15
+  const tamamlananIsler = isler.filter(i => {
+    const q = arama.toLowerCase()
+    const aramaUy = !q || `${i.musteriler?.ad} ${i.musteriler?.soyad} ${i.araclar?.plaka} ${i.is_emri_no}`.toLowerCase().includes(q)
+    const musteriUy = !musteriFiltre || i.musteri_id === musteriFiltre
+    const personelUy = !personelFiltre || i.personel_id === personelFiltre
+    return aramaUy && musteriUy && personelUy && ['tamamlandi', 'teslim_edildi', 'iptal'].includes(i.durum)
+  }).slice(0, 15)
+
+
+  const bekleyen = isler.filter(i => i.durum === 'bekliyor').length
+  const devam = isler.filter(i => i.durum === 'devam_ediyor').length
+  const tahsilat = isler.filter(i => i.odeme_durumu === 'odenmedi').reduce((s,i) => s+(i.toplam_tutar||0), 0)
+
+  return (
+    <div>
+      {modalAcik && <IsEmriForm onKaydet={() => { setModalAcik(false); fetchData() }} onIptal={() => setModalAcik(false)} />}
+      {yazdirModal && <ServisFormuModal is={yazdirModal} onKapat={() => setYazdirModal(null)} />}
+      {detayModal && <IsEmriDetay is={detayModal} onKapat={() => setDetayModal(null)} onDurumGuncelle={handleDurumGuncelle} onGuncellendi={fetchData} onYazdir={(is) => { setDetayModal(null); setTimeout(() => setYazdirModal(is), 100) }} />}
+
+      <div className="stats-grid" style={{ marginBottom:'1rem' }}>
+        <div className="stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">Bekleyen</span>
+            <div className="stat-icon" style={{background:'rgba(245,166,35,.08)'}}><IconClock size={15} color="#f5a623" /></div>
+          </div>
+          <div className="stat-value" style={{color:'#f5a623'}}>{bekleyen}</div>
+          <div className="stat-sub up"><IconTrendUp size={10} color="#22c55e" />aktif</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">Devam Eden</span>
+            <div className="stat-icon" style={{background:'rgba(59,130,246,.08)'}}><IconTool size={15} color="#3b82f6" /></div>
+          </div>
+          <div className="stat-value" style={{color:'#3b82f6'}}>{devam}</div>
+          <div className="stat-sub">servis</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">Bekleyen Tahsilat</span>
+            <div className="stat-icon" style={{background:'rgba(229,72,77,.08)'}}><IconLira size={15} color="#e5484d" /></div>
+          </div>
+          <div className="stat-value" style={{color:'#e5484d', fontSize:'1.3rem'}}>{rakamGizli ? "₺ ***" : `₺${tahsilat.toLocaleString('tr-TR')}`}</div>
+          <div className="stat-sub dn"><IconAlert size={10} color="#e5484d" />ödenmedi</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-top">
+            <span className="stat-label">Toplam İş</span>
+            <div className="stat-icon" style={{background:'rgba(255,255,255,.04)'}}><IconClipboard size={15} color="#4a5068" /></div>
+          </div>
+          <div className="stat-value" style={{color:'#f0f0f0'}}>{rakamGizli ? "***" : isler.length}</div>
+          <div className="stat-sub">bu ay</div>
+        </div>
+      </div>
+
+      {/* Filtreler */}
+      <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', marginBottom:'0.75rem' }}>
+        <input className="search-input" style={{flex:2,minWidth:'150px'}} placeholder="İş no, müşteri, plaka..." value={arama} onChange={e => setArama(e.target.value)} />
+        <select className="search-input" style={{flex:1,minWidth:'120px'}} value={personelFiltre} onChange={e => setPersonelFiltre(e.target.value)}>
+          <option value="">Tüm Personel</option>
+          {personelList.map(p => <option key={p.id} value={p.id}>{p.ad} {p.soyad}</option>)}
+        </select>
+        <button className="btn btn-primary" onClick={() => setModalAcik(true)}>+ İş Emri</button>
+      </div>
+
+      {/* AKTİF İŞ EMİRLERİ */}
+      <div className="table-card" style={{marginBottom:'1rem'}}>
+        <div className="table-header">
+          <span className="table-title">⏳ Aktif İş Emirleri <span style={{fontSize:'0.85rem',color:'var(--text-muted)',fontWeight:400}}>({aktifIsler.length})</span></span>
+          {(musteriFiltre||personelFiltre||arama) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setArama(''); setMusteriFiltre(''); setPersonelFiltre(''); setDurumFiltre('') }}>Temizle</button>
+          )}
+        </div>
+        {loading ? <div className="empty-state"><p>Yükleniyor...</p></div> :
+         aktifIsler.length === 0 ? <div className="empty-state"><div className="empty-state-icon">✅</div><p>Aktif iş emri yok</p></div> : (
+          <>
+          <div className="desktop-only" style={{overflowX:'auto'}}>
+            <table>
+              <thead><tr><th>İş No</th><th>Müşteri</th><th>Araç</th><th>Teknisyen</th><th>Durum</th><th>Ödeme</th><th>Tutar</th><th>Tarih</th><th></th></tr></thead>
+              <tbody>
+                {aktifIsler.map(is => (
+                  <tr key={is.id}>
+                    <td style={{fontWeight:700,color:'var(--text-primary)'}}>#{is.is_emri_no}</td>
+                    <td style={{color:'var(--text-primary)'}}>{is.musteriler?.ad} {is.musteriler?.soyad}</td>
+                    <td><span style={{fontWeight:600,color:'#e5484d'}}>{is.araclar?.plaka}</span> <span style={{color:'var(--text-muted)',fontSize:'0.8rem'}}>{is.araclar?.marka}</span></td>
+                    <td style={{color:'var(--text-secondary)'}}>{is.personel ? `${is.personel.ad} ${is.personel.soyad}` : '-'}</td>
+                    <td>{durumBadge(is.durum)}</td>
+                    <td><span className={`badge ${is.odeme_durumu==='odendi'?'badge-odendi':is.odeme_durumu==='kismi'?'badge-kismi':'badge-odenmedi'}`}>{is.odeme_durumu==='odendi'?'Ödendi':is.odeme_durumu==='kismi'?'Kısmi':'Ödenmedi'}</span></td>
+                    <td style={{color:'#22c55e',fontWeight:600}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
+                    <td style={{color:'var(--text-muted)'}}>{new Date(is.created_at).toLocaleDateString('tr-TR')}</td>
+                    <td style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setDetayModal(is)}>Detay</button>
+                      <button className="btn btn-secondary btn-sm" title="Yazdır" onClick={(e) => { e.stopPropagation(); setYazdirModal(is) }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mobile-only" style={{padding:'8px'}}>
+            {aktifIsler.map(is => (
+              <div key={is.id} onClick={() => setDetayModal(is)} style={{background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px',marginBottom:'8px',cursor:'pointer'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'6px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                    <span style={{fontWeight:700,color:'var(--text-primary)',fontSize:'13px'}}>#{is.is_emri_no}</span>
+                    {durumBadge(is.durum)}
+                  </div>
+                  <span style={{color:'#22c55e',fontWeight:700,fontSize:'14px'}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</span>
+                </div>
+                <div style={{color:'var(--text-primary)',fontSize:'13px',fontWeight:500}}>{is.musteriler?.ad} {is.musteriler?.soyad}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px'}}>
+                  <span style={{color:'#e5484d',fontSize:'12px',fontWeight:600}}>{is.araclar?.plaka} <span style={{color:'var(--text-muted)',fontWeight:400}}>{is.araclar?.marka}</span></span>
+                  <span className={`badge ${is.odeme_durumu==='odendi'?'badge-odendi':is.odeme_durumu==='kismi'?'badge-kismi':'badge-odenmedi'}`}>{is.odeme_durumu==='odendi'?'Ödendi':is.odeme_durumu==='kismi'?'Kısmi':'Ödenmedi'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
+        )}
+      </div>
+
+      {/* GEÇMİŞ İŞ EMİRLERİ */}
+      <div className="table-card">
+        <div className="table-header">
+          <span className="table-title">📋 Geçmiş İş Emirleri <span style={{fontSize:'0.85rem',color:'var(--text-muted)',fontWeight:400}}>(Son 15)</span></span>
+        </div>
+        {tamamlananIsler.length === 0
+          ? <div className="empty-state"><div className="empty-state-icon">📋</div><p>Tamamlanan iş emri yok</p></div>
+          : (<>
+              <div className="desktop-only" style={{overflowX:'auto'}}>
+                <table>
+                  <thead><tr><th>İş No</th><th>Müşteri</th><th>Araç</th><th>Teknisyen</th><th>Durum</th><th>Ödeme</th><th>Tutar</th><th>Tarih</th><th></th></tr></thead>
+                  <tbody>
+                    {tamamlananIsler.map(is => (
+                      <tr key={is.id} style={{opacity:is.durum==='iptal'?0.55:1}}>
+                        <td style={{fontWeight:700,color:'var(--text-primary)'}}>#{is.is_emri_no}</td>
+                        <td style={{color:'var(--text-primary)'}}>{is.musteriler?.ad} {is.musteriler?.soyad}</td>
+                        <td><span style={{fontWeight:600,color:'#e5484d'}}>{is.araclar?.plaka}</span> <span style={{color:'var(--text-muted)',fontSize:'0.8rem'}}>{is.araclar?.marka}</span></td>
+                        <td style={{color:'var(--text-secondary)'}}>{is.personel ? `${is.personel.ad} ${is.personel.soyad}` : '-'}</td>
+                        <td>{durumBadge(is.durum)}</td>
+                        <td><span className={`badge ${is.odeme_durumu==='odendi'?'badge-odendi':is.odeme_durumu==='kismi'?'badge-kismi':'badge-odenmedi'}`}>{is.odeme_durumu==='odendi'?'Ödendi':is.odeme_durumu==='kismi'?'Kısmi':'Ödenmedi'}</span></td>
+                        <td style={{color:'#22c55e',fontWeight:600}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
+                        <td style={{color:'var(--text-muted)'}}>{new Date(is.created_at).toLocaleDateString('tr-TR')}</td>
+                        <td style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setDetayModal(is)}>Detay</button>
+                        {['tamamlandi','teslim_edildi'].includes(is.durum) ? (
+                          <button className="btn btn-secondary btn-sm" title="Yazdır" onClick={(e) => { e.stopPropagation(); setYazdirModal(is) }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
+                          </button>
+                        ) : (
+                          <button className="btn btn-secondary btn-sm" title="İş emri tamamlanmadan çıktı alınamaz" disabled style={{opacity:0.35,cursor:'not-allowed'}} onClick={(e) => { e.stopPropagation(); alert('İş emri tamamlanmadan çıktı alınamaz. Lütfen önce durumu "Tamamlandı" veya "Teslim Edildi" olarak güncelleyin.') }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
+                          </button>
+                        )}
+                      </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mobile-only" style={{padding:'8px'}}>
+                {tamamlananIsler.map(is => (
+                  <div key={is.id} onClick={() => setDetayModal(is)} style={{background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px',marginBottom:'8px',cursor:'pointer',opacity:is.durum==='iptal'?0.6:1}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'6px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                        <span style={{fontWeight:700,color:'var(--text-primary)',fontSize:'13px'}}>#{is.is_emri_no}</span>
+                        {durumBadge(is.durum)}
+                      </div>
+                      <span style={{color:'#22c55e',fontWeight:700,fontSize:'14px'}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</span>
+                    </div>
+                    <div style={{color:'var(--text-primary)',fontSize:'13px',fontWeight:500}}>{is.musteriler?.ad} {is.musteriler?.soyad}</div>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'4px'}}>
+                      <span style={{color:'#e5484d',fontSize:'12px',fontWeight:600}}>{is.araclar?.plaka} <span style={{color:'var(--text-muted)',fontWeight:400}}>{is.araclar?.marka}</span></span>
+                      <span className={`badge ${is.odeme_durumu==='odendi'?'badge-odendi':is.odeme_durumu==='kismi'?'badge-kismi':'badge-odenmedi'}`}>{is.odeme_durumu==='odendi'?'Ödendi':is.odeme_durumu==='kismi'?'Kısmi':'Ödenmedi'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>)
+        }
+      </div>
+
+    </div>
+  )
+}
+
+export default IsEmirleri
