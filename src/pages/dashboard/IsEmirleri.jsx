@@ -648,20 +648,17 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
 
   const toplam = parcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
 
-  return (
-    <div>
-      {!kapali && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-          <button className="btn btn-primary btn-sm" onClick={() => setFormAcik(!formAcik)}>
-            {formAcik ? '✕ İptal' : '+ Parça Ekle'}
-          </button>
-        </div>
-      )}
+  const listeRef = useRef(null)
 
-      {formAcik && (
-        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
-          <div className="form-grid" style={{ gap: '0.5rem' }}>
-            <div className="field form-full">
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+      {/* SABİT EKLEME FORMU */}
+      {!kapali && (
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '10px' }}>Parça Ekle</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', alignItems: 'flex-end' }}>
+            <div className="field" style={{ margin: 0, gridColumn: 'span 2' }}>
               <label>Parça Ara / Seç</label>
               <ParcaAramaSelect
                 parcaListesi={parcaListesi}
@@ -671,47 +668,66 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
                 onManual={(isim) => setYeniParca(p => ({...p, parca_id: '', parca_isim: isim}))}
               />
             </div>
-            <div className="field">
+            <div className="field" style={{ margin: 0 }}>
               <label>Miktar</label>
               <input type="number" min="1" step="0.5" value={yeniParca.miktar} onChange={e => setYeniParca(p => ({ ...p, miktar: e.target.value }))} />
             </div>
-            <div className="field">
-              <label>Birim Fiyat (₺)</label>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Birim Fiyat</label>
               <input type="number" min="0" step="0.01" value={yeniParca.birim_fiyat} onChange={e => setYeniParca(p => ({ ...p, birim_fiyat: e.target.value }))} />
             </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-            <button className="btn btn-primary btn-sm" onClick={handleEkle} disabled={ekleniyor}>
-              {ekleniyor ? 'Ekleniyor...' : '✅ Ekle'}
+            <button className="btn btn-primary" onClick={handleEkle} disabled={ekleniyor}
+              style={{ height: '38px', alignSelf: 'flex-end', whiteSpace: 'nowrap' }}>
+              {ekleniyor ? '...' : '+ Ekle'}
             </button>
           </div>
         </div>
       )}
 
+      {/* PARÇA LİSTESİ */}
       {parcalar.length === 0 ? (
-        <div className="empty-state"><div className="empty-state-icon">🔩</div><p>Parça kaydı yok</p></div>
+        <div className="empty-state" style={{ padding: '1rem' }}>
+          <div className="empty-state-icon">🔩</div><p>Parça kaydı yok</p>
+        </div>
       ) : (
-        <>
-          <table>
-            <thead><tr><th>Parça</th><th>Miktar</th><th>Birim Fiyat</th><th>Toplam</th><th></th></tr></thead>
+        <div ref={listeRef} style={{ maxHeight: '220px', overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500 }}>Parça</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '55px' }}>Adet</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Birim</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Toplam</th>
+                <th style={{ width: '36px' }}></th>
+              </tr>
+            </thead>
             <tbody>
               {parcalar.map(p => (
-                <tr key={p.id}>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{p.parca_isim}</td>
-                  <td>{p.miktar}</td>
-                  <td>₺{parseFloat(p.birim_fiyat || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
-                  <td style={{ color: '#22c55e', fontWeight: 600 }}>₺{parseFloat(p.toplam || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
-                  <td>{!kapali && <button className="btn btn-danger btn-sm" onClick={() => handleSil(p.id)}>🗑️</button>}</td>
+                <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '7px 8px', color: 'var(--text-primary)', fontWeight: 500 }}>{p.parca_isim}</td>
+                  <td style={{ textAlign: 'center', padding: '7px 8px', color: 'var(--text-secondary)' }}>{p.miktar}</td>
+                  <td style={{ textAlign: 'right', padding: '7px 8px', color: 'var(--text-secondary)' }}>₺{parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
+                  <td style={{ textAlign: 'right', padding: '7px 8px', color: '#22c55e', fontWeight: 600 }}>₺{parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
+                  <td style={{ padding: '7px 4px', textAlign: 'center' }}>
+                    {!kapali && (
+                      <button type="button" onClick={() => handleSil(p.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e5484d', fontSize: '14px', padding: '2px 4px' }}>
+                        🗑️
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
-              <tr style={{ borderTop: '2px solid var(--border)' }}>
-                <td colSpan={3} style={{ textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 }}>Toplam:</td>
-                <td style={{ color: '#22c55e', fontWeight: 700 }}>₺{toplam.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3} style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--text-muted)', fontSize: '12px' }}>Toplam</td>
+                <td style={{ textAlign: 'right', padding: '8px 8px', color: '#22c55e', fontWeight: 700, fontSize: '14px' }}>₺{toplam.toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
                 <td></td>
               </tr>
-            </tbody>
+            </tfoot>
           </table>
-        </>
+        </div>
       )}
     </div>
   )
@@ -1258,7 +1274,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
               <thead><tr><th>İş No</th><th>Müşteri</th><th>Araç</th><th>Teknisyen</th><th>Durum</th><th>Ödeme</th><th>Tutar</th><th>Tarih</th><th></th></tr></thead>
               <tbody>
                 {aktifIsler.map(is => (
-                  <tr key={is.id}>
+                  <tr key={is.id} onClick={() => setDetayModal(is)} style={{cursor:'pointer'}} onMouseEnter={e => e.currentTarget.style.background='var(--bg-elevated)'} onMouseLeave={e => e.currentTarget.style.background=''}>
                     <td style={{fontWeight:700,color:'var(--text-primary)'}}>#{is.is_emri_no}</td>
                     <td style={{color:'var(--text-primary)'}}>{is.musteriler?.ad} {is.musteriler?.soyad}</td>
                     <td><span style={{fontWeight:600,color:'#e5484d'}}>{is.araclar?.plaka}</span> <span style={{color:'var(--text-muted)',fontSize:'0.8rem'}}>{is.araclar?.marka}</span></td>
@@ -1268,7 +1284,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
                     <td style={{color:'#22c55e',fontWeight:600}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
                     <td style={{color:'var(--text-muted)'}}>{new Date(is.created_at).toLocaleDateString('tr-TR')}</td>
                     <td style={{display:'flex',gap:'4px',alignItems:'center'}}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setDetayModal(is)}>Detay</button>
+                      <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); setDetayModal(is) }}>Detay</button>
                       <button className="btn btn-secondary btn-sm" title="Yazdır" onClick={(e) => { e.stopPropagation(); setYazdirModal(is) }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
                       </button>
@@ -1313,7 +1329,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
                   <thead><tr><th>İş No</th><th>Müşteri</th><th>Araç</th><th>Teknisyen</th><th>Durum</th><th>Ödeme</th><th>Tutar</th><th>Tarih</th><th></th></tr></thead>
                   <tbody>
                     {tamamlananIsler.map(is => (
-                      <tr key={is.id} style={{opacity:is.durum==='iptal'?0.55:1}}>
+                      <tr key={is.id} style={{opacity:is.durum==='iptal'?0.55:1,cursor:'pointer'}} onClick={() => setDetayModal(is)} onMouseEnter={e => e.currentTarget.style.background='var(--bg-elevated)'} onMouseLeave={e => e.currentTarget.style.background=''}>
                         <td style={{fontWeight:700,color:'var(--text-primary)'}}>#{is.is_emri_no}</td>
                         <td style={{color:'var(--text-primary)'}}>{is.musteriler?.ad} {is.musteriler?.soyad}</td>
                         <td><span style={{fontWeight:600,color:'#e5484d'}}>{is.araclar?.plaka}</span> <span style={{color:'var(--text-muted)',fontSize:'0.8rem'}}>{is.araclar?.marka}</span></td>
