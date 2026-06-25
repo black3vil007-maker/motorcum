@@ -448,6 +448,10 @@ tbody tr{page-break-inside:avoid}
 .onay-t{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:28px}
 .onay-b{border-top:1px solid #ccc;padding-top:7px;font-size:9px;color:#aaa;text-align:center}
 .footer{margin-top:18px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:9px;color:#bbb}
+@media print{
+  .footer{position:fixed;bottom:5mm;left:10mm;right:10mm;background:#fff;border-top:1px solid #ddd}
+  body{margin-bottom:20mm}
+}
 .page-footer{position:running(footer);font-size:9px;color:#bbb;text-align:center}
 @media print{.onay-grid{page-break-inside:avoid}.imza-her-sayfa{display:block} @page{@bottom-center{content:element(footer)}}}
 @media print{@page{margin:10mm;size:A4;} @page{margin-top:10mm;margin-bottom:10mm;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}} @media print{a[href]:after{content:none!important}} * { -webkit-print-color-adjust: exact; }
@@ -502,7 +506,7 @@ ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class=
   <div class="fbox"><div class="flbl">Tarih</div><div class="fval">${new Date(isEmri.created_at).toLocaleDateString('tr-TR')}</div></div>
 </div>
 ${isEmri.notlar?'<div class="sec-title">Notlar</div><div class="notlar">'+isEmri.notlar+'</div>':''}
-<div style="page-break-inside:avoid">
+<div style="page-break-inside:avoid;margin-top:16px">
   <div class="sec-title">Onay</div>
   <div class="onay-grid">
     <div class="onay-box"><div class="onay-t">Yetkili Imza</div><div class="onay-b">Ad Soyad / Kase</div></div>
