@@ -481,9 +481,11 @@ tbody tr{page-break-inside:avoid}
 </div>
 ${isEmri.sikayet?'<div class="sec-title">Musteri Sikayeti</div><div class="notlar">'+isEmri.sikayet+'</div>':''}
 ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class="notlar">'+isEmri.yapilan_isler+'</div>':''}
-<div class="sec-title">Parcalar ve Islem Bedeli</div>
 <table>
-  <thead>${fiyatGoster ? '<tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr>' : '<tr><th style="width:60%">Parca / Islem</th><th style="width:40%;text-align:center">Miktar</th></tr>'}</thead>
+  <thead>
+    <tr><th colspan="${fiyatGoster ? 4 : 2}" style="background:#fff;color:#888;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 4px;border-bottom:1px solid #e0e0e0">Parcalar ve Islem Bedeli</th></tr>
+    ${fiyatGoster ? '<tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr>' : '<tr><th style="width:60%">Parca / Islem</th><th style="width:40%;text-align:center">Miktar</th></tr>'}
+  </thead>
   <tbody>${parcalarHTML}${fiyatGoster ? '<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;' + (genelToplam > 0 ? genelToplam : (isEmri.toplam_tutar||0)).toLocaleString('tr-TR',{minimumFractionDigits:2}) + '</td></tr>' : ''}</tbody>
 </table>
 <div class="sec-title">Odeme Bilgisi</div>
