@@ -464,6 +464,13 @@ tbody tr{page-break-inside:avoid}
     <div><span class="status-ok">&#10003; Tamamlandi</span></div>
   </div>
 </div>
+<!-- Her sayfada tekrar eden mini header -->
+<div style="display:none" class="page-header" id="ph">
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:6px">
+    <div style="font-size:11px;font-weight:700;color:#1a1a1a">MOTORCUM &mdash; Servis Formu</div>
+    <div style="font-size:11px;color:#888">#${isEmri.is_emri_no} &middot; ${isEmri.araclar?.plaka||''} &middot; ${isEmri.musteriler?.ad||''} ${isEmri.musteriler?.soyad||''}</div>
+  </div>
+</div>
 <div class="sec-title">Musteri Bilgileri</div>
 <div class="two-col">
   <div class="fbox"><div class="flbl">Ad Soyad</div><div class="fval">${isEmri.musteriler?.ad||''} ${isEmri.musteriler?.soyad||''}</div></div>
@@ -495,10 +502,12 @@ ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class=
   <div class="fbox"><div class="flbl">Tarih</div><div class="fval">${new Date(isEmri.created_at).toLocaleDateString('tr-TR')}</div></div>
 </div>
 ${isEmri.notlar?'<div class="sec-title">Notlar</div><div class="notlar">'+isEmri.notlar+'</div>':''}
-<div class="sec-title" style="page-break-before:auto">Onay</div>
-<div class="onay-grid" style="page-break-inside:avoid">
-  <div class="onay-box"><div class="onay-t">Yetkili Imza</div><div class="onay-b">Ad Soyad / Kase</div></div>
-  <div class="onay-box"><div class="onay-t">Musteri Imzasi</div><div class="onay-b">Araci teslim aldim</div></div>
+<div style="page-break-inside:avoid">
+  <div class="sec-title">Onay</div>
+  <div class="onay-grid">
+    <div class="onay-box"><div class="onay-t">Yetkili Imza</div><div class="onay-b">Ad Soyad / Kase</div></div>
+    <div class="onay-box"><div class="onay-t">Musteri Imzasi</div><div class="onay-b">Araci teslim aldim</div></div>
+  </div>
 </div>
 <div class="footer">
   <div>MOTORCUM Servis Yonetim Sistemi</div>
