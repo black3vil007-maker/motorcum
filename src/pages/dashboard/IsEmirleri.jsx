@@ -407,8 +407,12 @@ const ServisFormuModal = ({ is: isEmri, onKapat }) => {
     const fiyatGoster = !tutarGizle
 
     const parcalarHTML = guncelParcalar.length > 0
-      ? guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${fiyatGoster ? p.miktar : '0'}</td><td style="text-align:right">${fiyatGoster ? '&#x20BA;' + parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2}) : '&#x20BA;0,00'}</td><td style="text-align:right">&#x20BA;${fiyatGoster ? parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2}) : '0,00'}</td></tr>`).join('')
-      : '<tr><td colspan="4" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
+      ? fiyatGoster
+        ? guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td><td style="text-align:right">&#x20BA;${parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td><td style="text-align:right">&#x20BA;${parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr>`).join('')
+        : guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td></tr>`).join('')
+      : fiyatGoster
+        ? '<tr><td colspan="4" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
+        : '<tr><td colspan="2" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
 
     const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Servis Formu #${isEmri.is_emri_no}</title><style>
 *{box-sizing:border-box;margin:0;padding:0} @page{size:A4;margin:10mm;} @media print{body{margin:0} thead{display:table-header-group} tfoot{display:table-footer-group} a[href]:after{content:none!important}}
@@ -444,6 +448,8 @@ tbody tr{page-break-inside:avoid}
 .onay-t{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:28px}
 .onay-b{border-top:1px solid #ccc;padding-top:7px;font-size:9px;color:#aaa;text-align:center}
 .footer{margin-top:18px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:9px;color:#bbb}
+.page-footer{position:running(footer);font-size:9px;color:#bbb;text-align:center}
+@media print{.onay-grid{page-break-inside:avoid}.imza-her-sayfa{display:block} @page{@bottom-center{content:element(footer)}}}
 @media print{@page{margin:10mm;size:A4;} @page{margin-top:10mm;margin-bottom:10mm;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}} @media print{a[href]:after{content:none!important}} * { -webkit-print-color-adjust: exact; }
 </style></head><body>
 <div class="header">
@@ -477,8 +483,8 @@ ${isEmri.sikayet?'<div class="sec-title">Musteri Sikayeti</div><div class="notla
 ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class="notlar">'+isEmri.yapilan_isler+'</div>':''}
 <div class="sec-title">Parcalar ve Islem Bedeli</div>
 <table>
-  <thead><tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr></thead>
-  <tbody>${parcalarHTML}<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;${(genelToplam > 0 ? genelToplam : (isEmri.toplam_tutar||0)).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr></tbody>
+  <thead>${fiyatGoster ? '<tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr>' : '<tr><th style="width:60%">Parca / Islem</th><th style="width:40%;text-align:center">Miktar</th></tr>'}</thead>
+  <tbody>${parcalarHTML}${fiyatGoster ? '<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;' + (genelToplam > 0 ? genelToplam : (isEmri.toplam_tutar||0)).toLocaleString('tr-TR',{minimumFractionDigits:2}) + '</td></tr>' : ''}</tbody>
 </table>
 <div class="sec-title">Odeme Bilgisi</div>
 <div class="three-col">
@@ -487,8 +493,8 @@ ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class=
   <div class="fbox"><div class="flbl">Tarih</div><div class="fval">${new Date(isEmri.created_at).toLocaleDateString('tr-TR')}</div></div>
 </div>
 ${isEmri.notlar?'<div class="sec-title">Notlar</div><div class="notlar">'+isEmri.notlar+'</div>':''}
-<div class="sec-title">Onay</div>
-<div class="onay-grid">
+<div class="sec-title" style="page-break-before:auto">Onay</div>
+<div class="onay-grid" style="page-break-inside:avoid">
   <div class="onay-box"><div class="onay-t">Yetkili Imza</div><div class="onay-b">Ad Soyad / Kase</div></div>
   <div class="onay-box"><div class="onay-t">Musteri Imzasi</div><div class="onay-b">Araci teslim aldim</div></div>
 </div>
