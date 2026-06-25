@@ -428,18 +428,22 @@ const YoneticiPaneli = () => {
 
                   {/* İçerik */}
                   <div style={{
-                    fontSize: '12.5px',
-                    color: 'var(--text-secondary)',
-                    lineHeight: '1.7',
-                    whiteSpace: 'pre-wrap',
                     background: 'var(--bg-base)',
                     border: '1px solid var(--border)',
                     borderRadius: '7px',
                     padding: '10px 12px',
                     maxHeight: '120px',
                     overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
                   }}>
-                    {not.icerik}
+                    {not.icerik.split('\n').filter(s => s.trim()).map((satir, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                        <span style={{ color: '#e5484d', fontSize: '11px', marginTop: '2px', flexShrink: 0 }}>★</span>
+                        <span>{satir.trim().replace(/^[•\-\*]\s*/, '')}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

@@ -147,31 +147,12 @@ const GuncellemeNotuPopup = () => {
           overflowY: 'auto',
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {aktifNot.icerik.split('\n').filter(s => s.trim()).map((satir, i) => {
-              const madde = satir.trim().startsWith('•') || satir.trim().startsWith('-') || satir.trim().startsWith('*')
-              const metin = madde ? satir.trim().replace(/^[•\-\*]\s*/, '') : satir.trim()
-              return (
-                <div key={i} style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: madde ? '10px' : '0',
-                  fontSize: '13.5px',
-                  color: 'var(--text-secondary)',
-                  lineHeight: '1.6',
-                }}>
-                  {madde && (
-                    <div style={{
-                      width: '6px', height: '6px',
-                      borderRadius: '50%',
-                      background: '#e5484d',
-                      marginTop: '7px',
-                      flexShrink: 0,
-                    }} />
-                  )}
-                  <span>{metin}</span>
-                </div>
-              )
-            })}
+            {aktifNot.icerik.split('\n').filter(s => s.trim()).map((satir, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                <span style={{ color: '#e5484d', fontSize: '12px', marginTop: '2px', flexShrink: 0, lineHeight: 1 }}>&#9733;</span>
+                <span>{satir.trim().replace(/^[•\-\*]\s*/, '')}</span>
+              </div>
+            ))}
           </div>
         </div>
 

@@ -283,12 +283,12 @@ const IsEmriForm = ({ onKaydet, onIptal }) => {
                   </div>
                   <div className="field" style={{ margin: 0 }}>
                     <label>Miktar</label>
-                    <input type="number" min="1" step="0.5" value={parcaForm.miktar}
+                    <input type="number" min="1" step="0.5" value={parcaForm.miktar} className="no-spinner"
                       onChange={e => setParcaForm(f => ({ ...f, miktar: e.target.value }))} />
                   </div>
                   <div className="field" style={{ margin: 0 }}>
                     <label>Birim Fiyat</label>
-                    <input type="number" min="0" step="0.01" value={parcaForm.birim_fiyat}
+                    <input type="number" min="0" step="0.01" value={parcaForm.birim_fiyat} className="no-spinner"
                       onChange={e => setParcaForm(f => ({ ...f, birim_fiyat: e.target.value }))} />
                   </div>
                   <button type="button" className="btn btn-primary" onClick={parcaEkle}
@@ -311,7 +311,7 @@ const IsEmriForm = ({ onKaydet, onIptal }) => {
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500 }}>Parça</th>
                         <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '60px' }}>Adet</th>
-                        <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Birim</th>
+                        <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Fiyat</th>
                         <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Toplam</th>
                         <th style={{ width: '36px' }}></th>
                       </tr>
@@ -395,6 +395,8 @@ const ServisFormuModal = ({ is: isEmri, onKapat }) => {
       .then(({ data }) => setParcalar(data || []))
   }, [isEmri.id])
 
+  const [tutarGizle, setTutarGizle] = useState(false)
+
   const handlePrint = async () => {
     // Parçaları taze çek
     const { data: tazeParcalar } = await supabase
@@ -402,8 +404,10 @@ const ServisFormuModal = ({ is: isEmri, onKapat }) => {
     const guncelParcalar = tazeParcalar || []
     const genelToplam = guncelParcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
 
+    const fiyatGoster = !tutarGizle
+
     const parcalarHTML = guncelParcalar.length > 0
-      ? guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td><td style="text-align:right">&#x20BA;${parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td><td style="text-align:right">&#x20BA;${parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr>`).join('')
+      ? guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${fiyatGoster ? p.miktar : '0'}</td><td style="text-align:right">${fiyatGoster ? '&#x20BA;' + parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2}) : '&#x20BA;0,00'}</td><td style="text-align:right">&#x20BA;${fiyatGoster ? parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2}) : '0,00'}</td></tr>`).join('')
       : '<tr><td colspan="4" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
 
     const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Servis Formu #${isEmri.is_emri_no}</title><style>
@@ -430,9 +434,11 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1a1a1a;backgro
 .fval.green{color:#22a05b}
 .notlar{background:#fffbf0;border:1px solid #f0e0a0;border-radius:6px;padding:9px 12px;font-size:11.5px;color:#555;line-height:1.6;margin-top:4px}
 table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:5px}
-thead th{background:#1a1a1a;color:#fff;padding:7px 10px;text-align:left;font-size:10px;font-weight:600}
-tbody td{padding:8px 10px;border-bottom:1px solid #f0f0f0;color:#333}
-.tot-row td{background:#f5f5f5;font-weight:700;border-top:2px solid #ddd;color:#1a1a1a}
+thead{display:table-header-group}
+thead th{background:#1a1a1a;color:#fff;padding:5px 8px;text-align:left;font-size:10px;font-weight:600}
+tbody td{padding:5px 8px;border-bottom:1px solid #f0f0f0;color:#333}
+tbody tr{page-break-inside:avoid}
+.tot-row td{background:#f5f5f5;font-weight:700;border-top:2px solid #ddd;color:#1a1a1a;page-break-inside:avoid}
 .onay-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:5px}
 .onay-box{border:1.5px solid #ddd;border-radius:7px;padding:14px}
 .onay-t{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:28px}
@@ -472,7 +478,7 @@ ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class=
 <div class="sec-title">Parcalar ve Islem Bedeli</div>
 <table>
   <thead><tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr></thead>
-  <tbody>${parcalarHTML}<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;${genelToplam > 0 ? genelToplam.toLocaleString('tr-TR',{minimumFractionDigits:2}) : (isEmri.toplam_tutar||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr></tbody>
+  <tbody>${parcalarHTML}<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;${(genelToplam > 0 ? genelToplam : (isEmri.toplam_tutar||0)).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr></tbody>
 </table>
 <div class="sec-title">Odeme Bilgisi</div>
 <div class="three-col">
@@ -525,6 +531,10 @@ ${isEmri.notlar?'<div class="sec-title">Notlar</div><div class="notlar">'+isEmri
             <div>✓ İmza alanları</div>
           </div>
           <div style={{display:'flex',gap:'8px',flexDirection:'column'}}>
+            <label style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',userSelect:'none',padding:'8px 12px',background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'8px'}}>
+              <input type="checkbox" checked={tutarGizle} onChange={e => setTutarGizle(e.target.checked)} style={{width:'15px',height:'15px',accentColor:'#e5484d'}} />
+              <span style={{fontSize:'13px',color:'var(--text-secondary)'}}>Çıktıda tutarları gizle</span>
+            </label>
             <button className="btn btn-primary" style={{width:'100%',height:40,fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}
               onClick={handlePrint}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -646,6 +656,23 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
     if (onTutarGuncelle) onTutarGuncelle(yeniToplam)
   }
 
+  const handleGuncelle = async (id, field, value) => {
+    const p = parcalar.find(p => p.id === id)
+    if (!p) return
+    const yeniMiktar = field === 'miktar' ? parseFloat(value || 1) : parseFloat(p.miktar || 1)
+    const yeniFiyat = field === 'birim_fiyat' ? parseFloat(value || 0) : parseFloat(p.birim_fiyat || 0)
+    const yeniToplam = yeniMiktar * yeniFiyat
+    await supabase.from('is_emri_parcalari').update({
+      [field]: field === 'miktar' ? yeniMiktar : yeniFiyat,
+      toplam: yeniToplam
+    }).eq('id', id)
+    const guncellenmis = parcalar.map(p => p.id === id ? { ...p, [field]: field === 'miktar' ? yeniMiktar : yeniFiyat, toplam: yeniToplam } : p)
+    setParcalar(guncellenmis)
+    const yeniToplamTutar = guncellenmis.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+    await supabase.from('is_emirleri').update({ toplam_tutar: yeniToplamTutar }).eq('id', isEmriId)
+    if (onTutarGuncelle) onTutarGuncelle(yeniToplamTutar)
+  }
+
   const toplam = parcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
 
   const listeRef = useRef(null)
@@ -670,11 +697,11 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
             </div>
             <div className="field" style={{ margin: 0 }}>
               <label>Miktar</label>
-              <input type="number" min="1" step="0.5" value={yeniParca.miktar} onChange={e => setYeniParca(p => ({ ...p, miktar: e.target.value }))} />
+              <input type="number" min="1" step="0.5" value={yeniParca.miktar} className="no-spinner" onChange={e => setYeniParca(p => ({ ...p, miktar: e.target.value }))} />
             </div>
             <div className="field" style={{ margin: 0 }}>
               <label>Birim Fiyat</label>
-              <input type="number" min="0" step="0.01" value={yeniParca.birim_fiyat} onChange={e => setYeniParca(p => ({ ...p, birim_fiyat: e.target.value }))} />
+              <input type="number" min="0" step="0.01" value={yeniParca.birim_fiyat} className="no-spinner" onChange={e => setYeniParca(p => ({ ...p, birim_fiyat: e.target.value }))} />
             </div>
             <button className="btn btn-primary" onClick={handleEkle} disabled={ekleniyor}
               style={{ height: '38px', alignSelf: 'flex-end', whiteSpace: 'nowrap' }}>
@@ -696,7 +723,7 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500 }}>Parça</th>
                 <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '55px' }}>Adet</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Birim</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Fiyat</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '90px' }}>Toplam</th>
                 <th style={{ width: '36px' }}></th>
               </tr>
@@ -705,8 +732,22 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
               {parcalar.map(p => (
                 <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '7px 8px', color: 'var(--text-primary)', fontWeight: 500 }}>{p.parca_isim}</td>
-                  <td style={{ textAlign: 'center', padding: '7px 8px', color: 'var(--text-secondary)' }}>{p.miktar}</td>
-                  <td style={{ textAlign: 'right', padding: '7px 8px', color: 'var(--text-secondary)' }}>₺{parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
+                  <td style={{ textAlign: 'center', padding: '4px 6px' }}>
+                    {kapali ? p.miktar : (
+                      <input type="number" min="0.5" step="0.5" defaultValue={p.miktar}
+                        onBlur={e => handleGuncelle(p.id, 'miktar', e.target.value)}
+                        style={{ width: '70px', textAlign: 'center', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '5px', padding: '4px 6px', color: 'var(--text-primary)', fontSize: '12px', MozAppearance: 'textfield', appearance: 'textfield' }} className="no-spinner"
+                      />
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right', padding: '4px 6px' }}>
+                    {kapali ? `₺${parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}` : (
+                      <input type="number" min="0" step="0.01" defaultValue={p.birim_fiyat}
+                        onBlur={e => handleGuncelle(p.id, 'birim_fiyat', e.target.value)}
+                        style={{ width: '95px', textAlign: 'right', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '5px', padding: '4px 6px', color: 'var(--text-primary)', fontSize: '12px', MozAppearance: 'textfield', appearance: 'textfield' }} className="no-spinner"
+                      />
+                    )}
+                  </td>
                   <td style={{ textAlign: 'right', padding: '7px 8px', color: '#22c55e', fontWeight: 600 }}>₺{parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td>
                   <td style={{ padding: '7px 4px', textAlign: 'center' }}>
                     {!kapali && (
@@ -987,7 +1028,6 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
                       {['tamamlandi','teslim_edildi'].includes(isEmri.durum) && (
                         <button className="btn btn-primary btn-sm" style={{display:'flex',alignItems:'center',gap:'5px'}}
                           onClick={async () => {
-                            // Taze veri çek, çıktıda güncel bilgiler olsun
                             const { data: taze } = await supabase
                               .from('is_emirleri')
                               .select('*, musteriler(ad, soyad, telefon), araclar(plaka, marka, model, yil, renk, km), personel(ad, soyad)')
@@ -1211,7 +1251,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
     <div>
       {modalAcik && <IsEmriForm onKaydet={() => { setModalAcik(false); fetchData() }} onIptal={() => setModalAcik(false)} />}
       {yazdirModal && <ServisFormuModal is={yazdirModal} onKapat={() => setYazdirModal(null)} />}
-      {detayModal && <IsEmriDetay is={detayModal} onKapat={() => setDetayModal(null)} onDurumGuncelle={handleDurumGuncelle} onGuncellendi={fetchData} onYazdir={(is) => { setDetayModal(null); setTimeout(() => setYazdirModal(is), 100) }} />}
+      {detayModal && <IsEmriDetay is={detayModal} onKapat={() => { setDetayModal(null); fetchData() }} onDurumGuncelle={handleDurumGuncelle} onGuncellendi={fetchData} onYazdir={(is) => { setDetayModal(null); setTimeout(() => setYazdirModal(is), 100) }} />}
 
       <div className="stats-grid" style={{ marginBottom:'1rem' }}>
         <div className="stat-card">
