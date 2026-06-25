@@ -406,13 +406,39 @@ const ServisFormuModal = ({ is: isEmri, onKapat }) => {
 
     const fiyatGoster = !tutarGizle
 
-    const parcalarHTML = guncelParcalar.length > 0
-      ? fiyatGoster
-        ? guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td><td style="text-align:right">&#x20BA;${parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td><td style="text-align:right">&#x20BA;${parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr>`).join('')
-        : guncelParcalar.map(p => `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td></tr>`).join('')
-      : fiyatGoster
-        ? '<tr><td colspan="4" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
-        : '<tr><td colspan="2" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>'
+    const SAYFA_SATIR = 12
+    const kolonSayisi = fiyatGoster ? 4 : 2
+    const theadHTML = fiyatGoster
+      ? `<thead>
+          <tr><th colspan="4" style="background:#fff;color:#888;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 4px;border-bottom:1px solid #e0e0e0">Parcalar ve Islem Bedeli</th></tr>
+          <tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr>
+         </thead>`
+      : `<thead>
+          <tr><th colspan="2" style="background:#fff;color:#888;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 4px;border-bottom:1px solid #e0e0e0">Parcalar ve Islem Bedeli</th></tr>
+          <tr><th style="width:60%">Parca / Islem</th><th style="width:40%;text-align:center">Miktar</th></tr>
+         </thead>`
+
+    const satirHTML = (p) => fiyatGoster
+      ? `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td><td style="text-align:right">&#x20BA;${parseFloat(p.birim_fiyat||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td><td style="text-align:right">&#x20BA;${parseFloat(p.toplam||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr>`
+      : `<tr><td>${p.parca_isim}</td><td style="text-align:center">${p.miktar}</td></tr>`
+
+    // 12'li gruplara böl, her grup ayrı tablo
+    const gruplar = []
+    for (let i = 0; i < guncelParcalar.length; i += SAYFA_SATIR) {
+      gruplar.push(guncelParcalar.slice(i, i + SAYFA_SATIR))
+    }
+    if (gruplar.length === 0) gruplar.push([])
+
+    const parcalarHTML = gruplar.map((grup, gi) => {
+      const sonGrup = gi === gruplar.length - 1
+      const toplamSatir = sonGrup && fiyatGoster
+        ? `<tr class="tot-row"><td colspan="${kolonSayisi - 1}" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;${(genelToplam > 0 ? genelToplam : (isEmri.toplam_tutar||0)).toLocaleString('tr-TR',{minimumFractionDigits:2})}</td></tr>`
+        : ''
+      const satirlar = grup.length > 0
+        ? grup.map(p => satirHTML(p)).join('')
+        : `<tr><td colspan="${kolonSayisi}" style="text-align:center;color:#999;padding:12px">Parca kaydi yok</td></tr>`
+      return `<table style="${gi > 0 ? 'page-break-before:always' : ''}">${theadHTML}<tbody>${satirlar}${toplamSatir}</tbody></table>`
+    }).join('')
 
     const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Servis Formu #${isEmri.is_emri_no}</title><style>
 *{box-sizing:border-box;margin:0;padding:0} @page{size:A4;margin:10mm;} @media print{body{margin:0} thead{display:table-header-group} tfoot{display:table-footer-group} a[href]:after{content:none!important}}
@@ -492,13 +518,7 @@ tbody tr{page-break-inside:avoid}
 </div>
 ${isEmri.sikayet?'<div class="sec-title">Musteri Sikayeti</div><div class="notlar">'+isEmri.sikayet+'</div>':''}
 ${isEmri.yapilan_isler?'<div class="sec-title">Yapilan Islemler</div><div class="notlar">'+isEmri.yapilan_isler+'</div>':''}
-<table>
-  <thead>
-    <tr><th colspan="${fiyatGoster ? 4 : 2}" style="background:#fff;color:#888;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:10px 8px 4px;border-bottom:1px solid #e0e0e0">Parcalar ve Islem Bedeli</th></tr>
-    ${fiyatGoster ? '<tr><th style="width:44%">Parca / Islem</th><th style="width:14%;text-align:center">Miktar</th><th style="width:21%;text-align:right">Birim Fiyat</th><th style="width:21%;text-align:right">Tutar</th></tr>' : '<tr><th style="width:60%">Parca / Islem</th><th style="width:40%;text-align:center">Miktar</th></tr>'}
-  </thead>
-  <tbody>${parcalarHTML}${fiyatGoster ? '<tr class="tot-row"><td colspan="3" style="text-align:right;font-size:11px">Genel Toplam</td><td style="text-align:right;color:#e5484d;font-size:15px">&#x20BA;' + (genelToplam > 0 ? genelToplam : (isEmri.toplam_tutar||0)).toLocaleString('tr-TR',{minimumFractionDigits:2}) + '</td></tr>' : ''}</tbody>
-</table>
+${parcalarHTML}
 <div class="sec-title">Odeme Bilgisi</div>
 <div class="three-col">
   <div class="fbox"><div class="flbl">Odeme Durumu</div><div class="fval ${isEmri.odeme_durumu==='odendi'?'green':''}">${isEmri.odeme_durumu==='odendi'?'&#10003; Odendi':isEmri.odeme_durumu==='kismi'?'Kismi':'-'}</div></div>
