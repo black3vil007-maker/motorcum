@@ -150,7 +150,7 @@ const GenelBakis = ({ onIsEmriAc }) => {
                       </td>
                       <td style={{color:'var(--text-secondary)'}}>{is.personel ? `${is.personel.ad} ${is.personel.soyad}` : '-'}</td>
                       <td>{durumBadge(is.durum)}</td>
-                      <td style={{color:'#22c55e', fontWeight:600}}>₺{(is.toplam_tutar || 0).toLocaleString('tr-TR')}</td>
+                      <td style={{color:'#22c55e', fontWeight:600}}>{rakamGizli ? '***' : '₺' + (is.toplam_tutar || 0).toLocaleString('tr-TR')}</td>
                       <td style={{color:'var(--text-muted)'}}>{new Date(is.created_at).toLocaleDateString('tr-TR')}</td>
                     </tr>
                   ))}
