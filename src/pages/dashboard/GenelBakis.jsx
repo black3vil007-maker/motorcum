@@ -6,7 +6,7 @@ import { IconUsers, IconMotorbike, IconTool, IconLira, IconTrendUp } from '../..
 const GenelBakis = ({ onIsEmriAc }) => {
   const { profile } = useAuth()
   const gizliRoller = ['teknisyen', 'kullanici']
-  const rakamGizli = gizliRoller.includes(profile?.rol)
+  const rakamGizli = gizliRoller.includes(profile?.rol) || profile?.rol === 'admin'
   const [stats, setStats] = useState({
     toplamMusteri: 0, toplamArac: 0, aktifIsEmri: 0,
     bekleyenIsler: 0, bugunCiro: 0, bugunTamamlanan: 0,

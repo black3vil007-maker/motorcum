@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../supabaseClient'
 
 // Bar chart - flex tabanlı, responsive
@@ -63,6 +64,8 @@ const DonutChart = ({ segments, size = 110 }) => {
 }
 
 const Raporlar = () => {
+  const { profile } = useAuth()
+  const rakamGizli = profile?.rol === 'admin'
   const [aralik, setAralik] = useState('hafta')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({
@@ -195,9 +198,9 @@ const Raporlar = () => {
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
         {[
-          { label:'Toplam Ciro', value:`₺${data.toplamCiro.toLocaleString('tr-TR')}`, color:'#3b82f6', sub:`%${tahsilatOrani} tahsil` },
-          { label:'Tahsil Edilen', value:`₺${data.tahsilEdilen.toLocaleString('tr-TR')}`, color:'#22c55e', sub:'ödendi' },
-          { label:'Bekleyen Tahsilat', value:`₺${data.bekleyenTahsilat.toLocaleString('tr-TR')}`, color:'#e5484d', sub:'ödenmedi' },
+          { label:'Toplam Ciro', value: rakamGizli ? '***' : `₺${data.toplamCiro.toLocaleString('tr-TR')}`, color:'#3b82f6', sub:`%${tahsilatOrani} tahsil` },
+          { label:'Tahsil Edilen', value: rakamGizli ? '***' : `₺${data.tahsilEdilen.toLocaleString('tr-TR')}`, color:'#22c55e', sub:'ödendi' },
+          { label:'Bekleyen Tahsilat', value: rakamGizli ? '***' : `₺${data.bekleyenTahsilat.toLocaleString('tr-TR')}`, color:'#e5484d', sub:'ödenmedi' },
         ].map((k,i) => (
           <div key={i} className="table-card" style={{padding:'12px 14px'}}>
             <div style={{fontSize:'9px',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600,marginBottom:'6px'}}>{k.label}</div>
@@ -263,7 +266,7 @@ const Raporlar = () => {
                               <span style={{fontSize:'11px',color:'var(--text-secondary)',minWidth:28}}>%{basari}</span>
                             </div>
                           </td>
-                          <td style={{color:'#22c55e',fontWeight:600}}>₺{p.ciro.toLocaleString('tr-TR')}</td>
+                          <td style={{color:'#22c55e',fontWeight:600}}>{rakamGizli ? '***' : '₺' + p.ciro.toLocaleString('tr-TR')}</td>
                         </tr>
                       )
                     })}
@@ -278,7 +281,7 @@ const Raporlar = () => {
                     <div key={i} style={{background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px',marginBottom:'8px'}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
                         <span style={{fontWeight:600,color:'var(--text-primary)',fontSize:'13px'}}>{p.isim}</span>
-                        <span style={{color:'#22c55e',fontWeight:700}}>₺{p.ciro.toLocaleString('tr-TR')}</span>
+                        <span style={{color:'#22c55e',fontWeight:700}}>{rakamGizli ? '***' : '₺' + p.ciro.toLocaleString('tr-TR')}</span>
                       </div>
                       <div style={{display:'flex',gap:'12px',fontSize:'11px',color:'var(--text-secondary)',marginBottom:'6px'}}>
                         <span>📋 {p.isAdet} iş</span>
@@ -324,14 +327,14 @@ const Raporlar = () => {
           <div style={{fontWeight:600,fontSize:'13px',color:'var(--text-primary)',marginBottom:'14px'}}>💳 Tahsilat</div>
           <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
             {[
-              { label:'Ödendi', value:data.tahsilEdilen, color:'#22c55e', pct: data.toplamCiro>0?Math.round((data.tahsilEdilen/data.toplamCiro)*100):0 },
-              { label:'Kısmi', value:data.kismiOdeme, color:'#f5a623', pct: data.toplamCiro>0?Math.round((data.kismiOdeme/data.toplamCiro)*100):0 },
-              { label:'Ödenmedi', value:data.bekleyenTahsilat, color:'#e5484d', pct: data.toplamCiro>0?Math.round((data.bekleyenTahsilat/data.toplamCiro)*100):0 },
+              { label:'Ödendi', value: rakamGizli ? 0 : data.tahsilEdilen, color:'#22c55e', pct: data.toplamCiro>0?Math.round((data.tahsilEdilen/data.toplamCiro)*100):0 },
+              { label:'Kısmi', value: rakamGizli ? 0 : data.kismiOdeme, color:'#f5a623', pct: data.toplamCiro>0?Math.round((data.kismiOdeme/data.toplamCiro)*100):0 },
+              { label:'Ödenmedi', value: rakamGizli ? 0 : data.bekleyenTahsilat, color:'#e5484d', pct: data.toplamCiro>0?Math.round((data.bekleyenTahsilat/data.toplamCiro)*100):0 },
             ].map((t,i) => (
               <div key={i}>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
                   <span style={{fontSize:'11px',color:'var(--text-secondary)'}}>{t.label}</span>
-                  <span style={{fontSize:'12px',fontWeight:600,color:t.color}}>₺{t.value.toLocaleString('tr-TR')} <span style={{fontSize:'10px',opacity:.7}}>(%{t.pct})</span></span>
+                  <span style={{fontSize:'12px',fontWeight:600,color:t.color}}>{rakamGizli ? '***' : '₺' + t.value.toLocaleString('tr-TR')} <span style={{fontSize:'10px',opacity:.7}}>(%{t.pct})</span></span>
                 </div>
                 <div style={{height:5,background:'var(--bg-elevated)',borderRadius:3,overflow:'hidden'}}>
                   <div style={{width:`${t.pct}%`,height:'100%',background:t.color,borderRadius:3,transition:'width .6s'}}/>

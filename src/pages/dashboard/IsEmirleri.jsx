@@ -1179,7 +1179,7 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
 
 const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
   const { profile } = useAuth()
-  const rakamGizli = ['teknisyen', 'kullanici'].includes(profile?.rol)
+  const rakamGizli = ['teknisyen', 'kullanici', 'admin'].includes(profile?.rol)
   const sinirliGorus = ['teknisyen', 'kullanici'].includes(profile?.rol)
   const [isler, setIsler] = useState([])
   const [kisiselPersonelId, setKisiselPersonelId] = useState(null)
@@ -1362,7 +1362,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
                     <td style={{color:'var(--text-secondary)'}}>{is.personel ? `${is.personel.ad} ${is.personel.soyad}` : '-'}</td>
                     <td>{durumBadge(is.durum)}</td>
                     <td><span className={`badge ${is.odeme_durumu==='odendi'?'badge-odendi':is.odeme_durumu==='kismi'?'badge-kismi':'badge-odenmedi'}`}>{is.odeme_durumu==='odendi'?'Ödendi':is.odeme_durumu==='kismi'?'Kısmi':'Ödenmedi'}</span></td>
-                    <td style={{color:'#22c55e',fontWeight:600}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
+                    <td style={{color:'#22c55e',fontWeight:600}}>{rakamGizli ? '***' : '₺' + (is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
                     <td style={{color:'var(--text-muted)'}}>{new Date(is.created_at).toLocaleDateString('tr-TR')}</td>
                     <td style={{display:'flex',gap:'4px',alignItems:'center'}}>
                       <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); setDetayModal(is) }}>Detay</button>
@@ -1417,7 +1417,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
                         <td style={{color:'var(--text-secondary)'}}>{is.personel ? `${is.personel.ad} ${is.personel.soyad}` : '-'}</td>
                         <td>{durumBadge(is.durum)}</td>
                         <td><span className={`badge ${is.odeme_durumu==='odendi'?'badge-odendi':is.odeme_durumu==='kismi'?'badge-kismi':'badge-odenmedi'}`}>{is.odeme_durumu==='odendi'?'Ödendi':is.odeme_durumu==='kismi'?'Kısmi':'Ödenmedi'}</span></td>
-                        <td style={{color:'#22c55e',fontWeight:600}}>₺{(is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
+                        <td style={{color:'#22c55e',fontWeight:600}}>{rakamGizli ? '***' : '₺' + (is.toplam_tutar||0).toLocaleString('tr-TR')}</td>
                         <td style={{color:'var(--text-muted)'}}>{new Date(is.created_at).toLocaleDateString('tr-TR')}</td>
                         <td style={{display:'flex',gap:'4px',alignItems:'center'}}>
                         <button className="btn btn-secondary btn-sm" onClick={() => setDetayModal(is)}>Detay</button>
