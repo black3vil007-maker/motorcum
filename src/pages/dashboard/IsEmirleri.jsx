@@ -118,11 +118,10 @@ const IsEmriForm = ({ onKaydet, onIptal }) => {
   const parcaEkle = () => {
     if (!parcaForm.parca_isim) return
     const toplam = parseFloat(parcaForm.birim_fiyat || 0) * parseFloat(parcaForm.miktar || 1)
-    setParcalar(prev => [...prev, { ...parcaForm, toplam }])
-    setForm(f => {
-      const yeniToplam = [...parcalar, { ...parcaForm, toplam }].reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
-      return { ...f, toplam_tutar: yeniToplam.toFixed(2) }
-    })
+    const yeniParcalar = [...parcalar, { ...parcaForm, toplam }]
+    setParcalar(yeniParcalar)
+    const yeniToplam = yeniParcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+    setForm(f => ({ ...f, toplam_tutar: yeniToplam.toFixed(2) }))
     setParcaForm({ parca_id: '', parca_isim: '', miktar: 1, birim_fiyat: 0 })
     setTimeout(() => {
       if (parcaListeRef.current) parcaListeRef.current.scrollTop = parcaListeRef.current.scrollHeight
@@ -132,8 +131,8 @@ const IsEmriForm = ({ onKaydet, onIptal }) => {
   const parcaSil = (idx) => {
     const yeni = parcalar.filter((_, i) => i !== idx)
     setParcalar(yeni)
-    const t = yeni.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
-    setForm(f => ({ ...f, toplam_tutar: t.toFixed(2) }))
+    const yeniToplam = yeni.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
+    setForm(f => ({ ...f, toplam_tutar: yeniToplam.toFixed(2) }))
   }
 
   const parcaGuncelle = (idx, field, value) => {
@@ -162,7 +161,7 @@ const IsEmriForm = ({ onKaydet, onIptal }) => {
       sikayet: form.sikayet,
       yapilan_isler: form.is_tipi + (form.yapilan_isler ? '\n' + form.yapilan_isler : ''),
       notlar: form.notlar,
-      toplam_tutar: parseFloat(form.toplam_tutar || 0),
+      toplam_tutar: parcalar.reduce((s,p)=>s+parseFloat(p.toplam||0),0),
       odeme_durumu: form.odeme_durumu,
       odeme_turu: form.odeme_turu || null,
     }).select().single()
@@ -357,8 +356,8 @@ const IsEmriForm = ({ onKaydet, onIptal }) => {
             <div className="form-grid">
               <div className="field form-full">
                 <label>Toplam Tutar (₺)</label>
-                <input type="number" placeholder="0.00" value={form.toplam_tutar} onChange={e => setForm({...form, toplam_tutar: e.target.value})} style={{fontSize:'1.2rem',fontWeight:700}} />
-                {parcalar.length > 0 && <span style={{color:'#888',fontSize:'0.75rem',marginTop:'0.25rem',display:'block'}}>Parça toplamı: ₺{parcalar.reduce((s,p)=>s+parseFloat(p.toplam||0),0).toLocaleString('tr-TR',{minimumFractionDigits:2})} (işçilik ekleyebilirsiniz)</span>}
+                <input readOnly disabled value={`₺${parcalar.reduce((s,p)=>s+parseFloat(p.toplam||0),0).toLocaleString('tr-TR',{minimumFractionDigits:2})}`} style={{fontSize:'1.2rem',fontWeight:700,color:'#22c55e',cursor:'not-allowed',opacity:0.85}} />
+                <span style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'4px',display:'block'}}>Parça sekmesinden eklenen parçalardan otomatik hesaplanır</span>
               </div>
               <div className="field form-full">
                 <label>Ödeme Durumu</label>
@@ -685,7 +684,7 @@ const ParcaYonetim = ({ isEmriId, parcalar, setParcalar, kapali = false, onTutar
     if (!error && data) {
       const yeniParcalar = [...parcalar, data]
       setParcalar(yeniParcalar)
-      // Toplam tutarı güncelle
+      // Toplam tutarı güncelle (parça toplamı + işçilik)
       const yeniToplam = yeniParcalar.reduce((s, p) => s + parseFloat(p.toplam || 0), 0)
       await supabase.from('is_emirleri').update({ toplam_tutar: yeniToplam }).eq('id', isEmriId)
       if (onTutarGuncelle) onTutarGuncelle(yeniToplam)
@@ -852,6 +851,25 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
       .then(({ data }) => setPersonelList(data || []))
   }, [isEmri.id])
 
+  // Düzenle moduna girerken form'u GÜNCEL isEmri verisiyle senkronla
+  // (Parça eklenip-silinip sonra Düzenle'ye basılırsa stale veri kullanılmasın)
+  // Düzenle moduna girerken form'u GÜNCEL isEmri verisiyle senkronla
+  // (Parça eklenip-silinip sonra Düzenle'ye basılırsa stale veri kullanılmasın)
+  const duzenleAc = () => {
+    setForm({
+      personel_id: isEmri.personel_id || '',
+      sikayet: isEmri.sikayet || '',
+      yapilan_isler: isEmri.yapilan_isler || '',
+      notlar: isEmri.notlar || '',
+      arac_km: isEmri.arac_km || '',
+      toplam_tutar: isEmri.toplam_tutar || '',
+      odeme_durumu: isEmri.odeme_durumu || 'odenmedi',
+      odeme_turu: isEmri.odeme_turu || '',
+      tahmini_cikis: isEmri.tahmini_cikis ? isEmri.tahmini_cikis.slice(0,16) : '',
+    })
+    setDuzenle(true)
+  }
+
   const handleKaydet = async () => {
     setKaydediliyor(true)
     const { error } = await supabase.from('is_emirleri').update({
@@ -860,7 +878,6 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
       yapilan_isler: form.yapilan_isler,
       notlar: form.notlar,
       arac_km: form.arac_km ? parseInt(form.arac_km) : null,
-      toplam_tutar: parseFloat(form.toplam_tutar || 0),
       odeme_durumu: form.odeme_durumu,
       odeme_turu: form.odeme_turu || null,
       tahmini_cikis: form.tahmini_cikis || null,
@@ -948,7 +965,7 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
                         <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(false)}>İptal</button>
                         <button className="btn btn-primary btn-sm" onClick={handleKaydet} disabled={kaydediliyor}>{kaydediliyor ? 'Kaydediliyor...' : '💾 Kaydet'}</button>
                       </>
-                    : <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(true)}>✏️ Düzenle</button>
+                    : <button className="btn btn-secondary btn-sm" onClick={duzenleAc}>✏️ Düzenle</button>
                   }
                 </div>
               )}
@@ -982,10 +999,8 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
                 </div>
                 <div className="field">
                   <label>Toplam Tutar (₺)</label>
-                  {duzenle
-                    ? <input type="number" value={form.toplam_tutar} onChange={e => setForm(f => ({...f, toplam_tutar: e.target.value}))} />
-                    : <input readOnly value={`₺${(isEmri.toplam_tutar||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}`} style={{color:'#22c55e',fontWeight:700}} />
-                  }
+                  <input readOnly disabled value={`₺${(isEmri.toplam_tutar||0).toLocaleString('tr-TR',{minimumFractionDigits:2})}`} style={{color:'#22c55e',fontWeight:700,cursor:'not-allowed',opacity:0.85}} />
+                  <span style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'4px',display:'block'}}>Parça sekmesinden düzenlenir</span>
                 </div>
                 <div className="field form-full">
                   <label>Müşteri Şikayeti</label>
@@ -1059,7 +1074,7 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
                         <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(false)}>İptal</button>
                         <button className="btn btn-primary btn-sm" onClick={handleKaydet} disabled={kaydediliyor}>{kaydediliyor ? 'Kaydediliyor...' : '💾 Kaydet'}</button>
                       </>
-                    : <button className="btn btn-secondary btn-sm" onClick={() => setDuzenle(true)}>✏️ Düzenle</button>
+                    : <button className="btn btn-secondary btn-sm" onClick={duzenleAc}>✏️ Düzenle</button>
                   }
                 </div>
               )}
@@ -1234,6 +1249,7 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
   const [musteriFiltre, setMusteriFiltre] = useState('')
   const [personelFiltre, setPersonelFiltre] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('')
+  const [odemeFiltre, setOdemeFiltre] = useState('')
   const [loading, setLoading] = useState(true)
   const [modalAcik, setModalAcik] = useState(false)
   const [detayModal, setDetayModal] = useState(null)
@@ -1318,7 +1334,8 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
     const aramaUy = !q || `${i.musteriler?.ad} ${i.musteriler?.soyad} ${i.araclar?.plaka} ${i.is_emri_no}`.toLowerCase().includes(q)
     const musteriUy = !musteriFiltre || i.musteri_id === musteriFiltre
     const personelUy = !personelFiltre || i.personel_id === personelFiltre
-    return aramaUy && musteriUy && personelUy && ['bekliyor', 'devam_ediyor'].includes(i.durum)
+    const odemeUy = !odemeFiltre || i.odeme_durumu === odemeFiltre
+    return aramaUy && musteriUy && personelUy && odemeUy && ['bekliyor', 'devam_ediyor'].includes(i.durum)
   })
 
   // Tamamlanan işler: tamamlandi + teslim_edildi + iptal — son 15
@@ -1327,7 +1344,8 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
     const aramaUy = !q || `${i.musteriler?.ad} ${i.musteriler?.soyad} ${i.araclar?.plaka} ${i.is_emri_no}`.toLowerCase().includes(q)
     const musteriUy = !musteriFiltre || i.musteri_id === musteriFiltre
     const personelUy = !personelFiltre || i.personel_id === personelFiltre
-    return aramaUy && musteriUy && personelUy && ['tamamlandi', 'teslim_edildi', 'iptal'].includes(i.durum)
+    const odemeUy = !odemeFiltre || i.odeme_durumu === odemeFiltre
+    return aramaUy && musteriUy && personelUy && odemeUy && ['tamamlandi', 'teslim_edildi', 'iptal'].includes(i.durum)
   }).slice(0, 15)
 
 
@@ -1383,6 +1401,12 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
           <option value="">Tüm Personel</option>
           {personelList.map(p => <option key={p.id} value={p.id}>{p.ad} {p.soyad}</option>)}
         </select>
+        <select className="search-input" style={{flex:1,minWidth:'130px'}} value={odemeFiltre} onChange={e => setOdemeFiltre(e.target.value)}>
+          <option value="">Tüm Ödemeler</option>
+          <option value="odenmedi">Ödenmedi</option>
+          <option value="kismi">Kısmi Ödeme</option>
+          <option value="odendi">Ödendi</option>
+        </select>
         <button className="btn btn-primary" onClick={() => setModalAcik(true)}>+ İş Emri</button>
       </div>
 
@@ -1390,8 +1414,8 @@ const IsEmirleri = ({ acikIsEmri, onAcikIsEmriTemizle }) => {
       <div className="table-card" style={{marginBottom:'1rem'}}>
         <div className="table-header">
           <span className="table-title">⏳ Aktif İş Emirleri <span style={{fontSize:'0.85rem',color:'var(--text-muted)',fontWeight:400}}>({aktifIsler.length})</span></span>
-          {(musteriFiltre||personelFiltre||arama) && (
-            <button className="btn btn-secondary btn-sm" onClick={() => { setArama(''); setMusteriFiltre(''); setPersonelFiltre(''); setDurumFiltre('') }}>Temizle</button>
+          {(musteriFiltre||personelFiltre||arama||odemeFiltre) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setArama(''); setMusteriFiltre(''); setPersonelFiltre(''); setDurumFiltre(''); setOdemeFiltre('') }}>Temizle</button>
           )}
         </div>
         {loading ? <div className="empty-state"><p>Yükleniyor...</p></div> :
