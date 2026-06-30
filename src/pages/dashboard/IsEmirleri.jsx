@@ -8,6 +8,14 @@ const DURUMLAR_TR = { bekliyor: 'Bekliyor', devam_ediyor: 'Devam Ediyor', tamaml
 const IS_TIPLERI = ['Bakım', 'Arıza Giderme', 'Periyodik Bakım', 'Kaza Hasarı', 'Modifikasyon', 'Diğer']
 const ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Havale/EFT']
 
+// Türkiye telefon formatı: 0XXX XXX XX XX
+const formatTelefon = (tel) => {
+  if (!tel) return ''
+  const rakamlar = tel.replace(/\D/g, '')
+  if (rakamlar.length !== 11) return tel
+  return `${rakamlar.slice(0,4)} ${rakamlar.slice(4,7)} ${rakamlar.slice(7,9)} ${rakamlar.slice(9,11)}`
+}
+
 // Aranabilir müşteri dropdown
 const MusteriSelect = ({ musteriler, value, onChange }) => {
   const [query, setQuery] = useState('')
@@ -946,6 +954,16 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
               )}
               <div className="form-grid">
                 <div className="field"><label>Müşteri</label><input readOnly value={`${isEmri.musteriler?.ad||''} ${isEmri.musteriler?.soyad||''}`} /></div>
+                <div className="field">
+                  <label>Telefon</label>
+                  {isEmri.musteriler?.telefon ? (
+                    <a href={`tel:${isEmri.musteriler.telefon}`} style={{ textDecoration:'none' }}>
+                      <input readOnly value={formatTelefon(isEmri.musteriler.telefon)} style={{ cursor:'pointer', color:'#e5484d' }} />
+                    </a>
+                  ) : (
+                    <input readOnly value="-" />
+                  )}
+                </div>
                 <div className="field"><label>Araç</label><input readOnly value={`${isEmri.araclar?.plaka||''} — ${isEmri.araclar?.marka||''} ${isEmri.araclar?.model||''}`} /></div>
                 <div className="field"><label>Kayıt Tarihi</label><input readOnly value={new Date(isEmri.created_at).toLocaleString('tr-TR')} /></div>
                 <div className="field">
@@ -1051,6 +1069,35 @@ const IsEmriDetay = ({ is: initialIs, onKapat, onDurumGuncelle, onGuncellendi, o
           {/* DURUM SEKMESİ */}
           {aktifTab === 'durum' && (
             <div style={{display:'flex',flexDirection:'column',gap:'1.25rem'}}>
+
+              {/* MÜŞTERİ İLETİŞİM - tamamlandı/teslim edildi durumunda göster */}
+              {['tamamlandi','teslim_edildi'].includes(isEmri.durum) && isEmri.musteriler?.telefon && (
+                <div style={{
+                  background: 'rgba(34,197,94,.08)',
+                  border: '1px solid rgba(34,197,94,.2)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                }}>
+                  <div>
+                    <div style={{fontSize:'10px',fontWeight:600,color:'#22c55e',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'2px'}}>
+                      📞 Müşteri İletişim
+                    </div>
+                    <div style={{fontSize:'14px',fontWeight:600,color:'var(--text-primary)'}}>
+                      {isEmri.musteriler?.ad} {isEmri.musteriler?.soyad}
+                    </div>
+                    <div style={{fontSize:'13px',color:'var(--text-secondary)'}}>
+                      {formatTelefon(isEmri.musteriler.telefon)}
+                    </div>
+                  </div>
+                  <a href={`tel:${isEmri.musteriler.telefon}`} className="btn btn-primary btn-sm" style={{textDecoration:'none', whiteSpace:'nowrap'}}>
+                    📞 Ara
+                  </a>
+                </div>
+              )}
 
               {/* İŞ EMRİ DURUMU */}
               <div>

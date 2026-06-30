@@ -6,6 +6,14 @@ import RuhsatTarama from '../../components/dashboard/RuhsatTarama'
 const KAN_GRUPLARI = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', '0+', '0-']
 const YAKIT_TIPLERI = ['Benzin', 'Dizel', 'LPG', 'Elektrik', 'Hibrit']
 
+// Türkiye telefon formatı: 0XXX XXX XX XX
+const formatTelefon = (tel) => {
+  if (!tel) return ''
+  const rakamlar = tel.replace(/\D/g, '')
+  if (rakamlar.length !== 11) return tel
+  return `${rakamlar.slice(0,4)} ${rakamlar.slice(4,7)} ${rakamlar.slice(7,9)} ${rakamlar.slice(9,11)}`
+}
+
 const useAracListeleri = () => {
   const [markalar, setMarkalar] = useState([])
   const [modeller, setModeller] = useState({})
@@ -313,7 +321,7 @@ const MusteriDetay = ({ musteri: initialMusteri, onGeri, onIsEmriAc }) => {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{musteri.ad} {musteri.soyad}</div>
           <div style={{ fontSize: '0.78rem', color: '#666', display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.1rem' }}>
-            {musteri.telefon && <span>📞 {musteri.telefon}</span>}
+            {musteri.telefon && <span>📞 {formatTelefon(musteri.telefon)}</span>}
             {musteri.kan_grubu && <span>🩸 {musteri.kan_grubu}</span>}
             {araclar.length > 0 && <span>🏍️ {araclar.length} araç</span>}
           </div>
@@ -435,7 +443,7 @@ const MusteriDetay = ({ musteri: initialMusteri, onGeri, onIsEmriAc }) => {
             <div className="form-grid">
               <div className="field"><label>Ad</label><input readOnly={!duzenle} value={duzenle ? editForm.ad || '' : musteri.ad || ''} onChange={e => setEditForm({ ...editForm, ad: e.target.value })} /></div>
               <div className="field"><label>Soyad</label><input readOnly={!duzenle} value={duzenle ? editForm.soyad || '' : musteri.soyad || ''} onChange={e => setEditForm({ ...editForm, soyad: e.target.value })} /></div>
-              <div className="field"><label>Telefon</label><input readOnly={!duzenle} value={duzenle ? editForm.telefon || '' : musteri.telefon || '-'} onChange={e => setEditForm({ ...editForm, telefon: e.target.value })} /></div>
+              <div className="field"><label>Telefon</label><input readOnly={!duzenle} value={duzenle ? editForm.telefon || '' : (musteri.telefon ? formatTelefon(musteri.telefon) : '-')} onChange={e => setEditForm({ ...editForm, telefon: e.target.value })} /></div>
               <div className="field"><label>E-posta</label><input readOnly={!duzenle} value={duzenle ? editForm.email || '' : musteri.email || '-'} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
               <div className="field"><label>TC Kimlik No</label><input readOnly={!duzenle} value={duzenle ? editForm.tc || '' : musteri.tc || '-'} onChange={e => setEditForm({ ...editForm, tc: e.target.value })} /></div>
               <div className="field">
@@ -556,7 +564,7 @@ const Musteriler = ({ onIsEmriAc }) => {
                     {filtrelenmis.map(m => (
                       <tr key={m.id} style={{ cursor: 'pointer' }} onClick={() => setSeciliMusteri(m)}>
                         <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{m.ad} {m.soyad}</td>
-                        <td>{m.telefon || '-'}</td>
+                        <td>{m.telefon ? formatTelefon(m.telefon) : '-'}</td>
                         <td><span style={{ fontWeight: 600, letterSpacing: '0.03em', color: '#e63030', fontSize: '0.82rem' }}>{getPlakalari(m.id) || '-'}</span></td>
                         <td style={{ color: '#666' }}>{m.tc || '-'}</td>
                         <td>{m.kan_grubu ? <span className="badge badge-devam">{m.kan_grubu}</span> : '-'}</td>
@@ -576,7 +584,7 @@ const Musteriler = ({ onIsEmriAc }) => {
                     <div>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{m.ad} {m.soyad}</div>
                       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-                        {m.telefon && <span style={{ color: '#888', fontSize: '0.78rem' }}>📞 {m.telefon}</span>}
+                        {m.telefon && <span style={{ color: '#888', fontSize: '0.78rem' }}>📞 {formatTelefon(m.telefon)}</span>}
                         {getPlakalari(m.id) && <span style={{ color: '#e63030', fontSize: '0.78rem', fontWeight: 600 }}>🏍️ {getPlakalari(m.id)}</span>}
                         {m.kan_grubu && <span style={{ color: '#666', fontSize: '0.75rem' }}>🩸 {m.kan_grubu}</span>}
                       </div>
